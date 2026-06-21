@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0f766e">
+<meta name="theme-color" content="#1F3A5F">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Site Visit">
@@ -12,11 +12,21 @@
 <link rel="apple-touch-icon" href="./icon-192.png">
 <style>
   :root{
-    --teal:#0f766e; --teal-d:#0b574f; --teal-l:#14b8a6;
-    --bg:#eef2f5; --card:#ffffff; --ink:#0f172a; --muted:#64748b;
+    /* Atera Water brand palette */
+    --navy:#1F3A5F;          /* primary dark — app bar / dark surfaces */
+    --navy-deep:#113148;     /* deep navy — darkest surfaces */
+    --teal:#1B8C9B;          /* primary accent — buttons, links, active */
+    --teal-bright:#48C7D3;   /* bright accent — focus rings, highlights */
+    --blue:#2C7AB5;          /* secondary accent — logo blue */
+    --teal-d:#136B77;        /* darker teal — accent text on light */
+    --teal-l:#48C7D3;        /* alias of bright accent */
+    --teal-tint:#e7f5f7;     /* light teal fill (selected, slugbox) */
+    --teal-tint-line:#b3e2e8;
+    --navy-tint:#e9f0f8;     /* light blue fill */
+    --bg:#eef2f5; --card:#ffffff; --ink:#16273d; --muted:#5d6b7e;
     --line:#e2e8f0; --danger:#dc2626; --danger-bg:#fef2f2;
     --warn-bg:#fffbeb; --warn-ink:#92400e; --warn-line:#fde68a;
-    --radius:14px; --shadow:0 1px 3px rgba(15,23,42,.10),0 1px 2px rgba(15,23,42,.06);
+    --radius:14px; --shadow:0 1px 3px rgba(17,49,72,.12),0 1px 2px rgba(17,49,72,.07);
     --safe-t:env(safe-area-inset-top,0px); --safe-b:env(safe-area-inset-bottom,0px);
   }
   *{box-sizing:border-box}
@@ -29,10 +39,11 @@
   button{font-family:inherit; font-size:16px; cursor:pointer}
   input,textarea,select{font-family:inherit; font-size:16px}
   a{color:var(--teal)}
+  input:focus,textarea:focus,select:focus{outline:2px solid var(--teal-bright); outline-offset:1px; border-color:var(--teal)}
 
   /* App bar */
   .appbar{
-    position:sticky; top:0; z-index:20; background:var(--teal); color:#fff;
+    position:sticky; top:0; z-index:20; background:var(--navy); color:#fff;
     padding:calc(10px + var(--safe-t)) 16px 10px; display:flex; align-items:center; gap:10px;
     box-shadow:var(--shadow);
   }
@@ -87,7 +98,7 @@
 
   .chip{display:inline-block; font-size:11px; font-weight:700; letter-spacing:.02em;
     padding:3px 9px; border-radius:999px; text-transform:uppercase}
-  .chip.prog{background:#fef9c3; color:#854d0e}
+  .chip.prog{background:var(--navy-tint); color:var(--blue)}
   .chip.done{background:#dcfce7; color:#166534}
 
   .section-title{font-size:13px; font-weight:700; color:var(--muted); text-transform:uppercase;
@@ -101,7 +112,7 @@
   .field textarea{min-height:90px; resize:vertical}
   .field .hint{font-size:12px; color:var(--muted); margin-top:6px}
   .slugbox{font-family:ui-monospace,Menlo,monospace; font-size:13px; color:var(--teal);
-    background:#f0fdfa; border:1px dashed #99f6e4; border-radius:8px; padding:8px 10px; margin-top:6px;
+    background:var(--teal-tint); border:1px dashed var(--teal-tint-line); border-radius:8px; padding:8px 10px; margin-top:6px;
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 
   /* Entry log */
@@ -114,9 +125,9 @@
   .entry .cat{font-weight:600; font-size:14px}
   .entry .note{font-size:13px; color:#475569; margin-top:2px; white-space:pre-wrap; word-break:break-word}
   .entry .filemeta{font-size:11px; color:#94a3b8; font-family:ui-monospace,Menlo,monospace; margin-top:3px}
-  .badge{display:inline-block; font-size:10px; font-weight:700; background:#0f172a; color:#fff;
+  .badge{display:inline-block; font-size:10px; font-weight:700; background:var(--navy-deep); color:#fff;
     padding:1px 6px; border-radius:6px; margin-left:6px; vertical-align:middle}
-  .badge.geo{background:#0369a1}
+  .badge.geo{background:var(--blue)}
   .iconbtn{border:0; background:transparent; color:#94a3b8; font-size:18px; padding:6px; border-radius:8px}
   .iconbtn:active{background:#f1f5f9}
 
@@ -145,12 +156,12 @@
   @keyframes slideup{from{transform:translateY(100%)}to{transform:none}}
   .sheet h2{margin:2px 0 12px; font-size:18px}
   .grabber{width:40px; height:4px; background:#cbd5e1; border-radius:2px; margin:0 auto 12px}
-  .preview{width:100%; max-height:240px; object-fit:contain; border-radius:12px; background:#0f172a; margin-bottom:14px}
+  .preview{width:100%; max-height:240px; object-fit:contain; border-radius:12px; background:var(--navy-deep); margin-bottom:14px}
   .cat-list{display:flex; flex-direction:column; gap:8px; margin-bottom:6px}
   .cat-btn{text-align:left; border:1px solid #cbd5e1; background:#fff; border-radius:12px;
     padding:13px 14px; font-size:15px; min-height:50px; display:flex; align-items:center; gap:10px}
   .cat-btn .dot{width:10px; height:10px; border-radius:50%; border:2px solid #cbd5e1; flex:none}
-  .cat-btn.sel{border-color:var(--teal); background:#f0fdfa; color:var(--teal-d); font-weight:600}
+  .cat-btn.sel{border-color:var(--teal); background:var(--teal-tint); color:var(--teal-d); font-weight:600}
   .cat-btn.sel .dot{border-color:var(--teal); background:var(--teal)}
 
   /* Bullet list editor */
@@ -159,7 +170,7 @@
 
   /* Toast */
   .toast{position:fixed; left:50%; bottom:calc(96px + var(--safe-b)); transform:translateX(-50%);
-    background:#0f172a; color:#fff; padding:10px 16px; border-radius:999px; font-size:14px; z-index:60;
+    background:var(--navy-deep); color:#fff; padding:10px 16px; border-radius:999px; font-size:14px; z-index:60;
     box-shadow:0 6px 20px rgba(0,0,0,.3); animation:fade .15s ease; max-width:90%}
   .install-hint{font-size:12px; color:var(--muted); text-align:center; margin-top:14px; padding:0 8px}
 </style>
@@ -284,6 +295,18 @@ function byTime(a,b){
 }
 function tmin(t){ const m=/^(\d{1,2}):(\d{2})/.exec(t||''); return m? (+m[1])*60+(+m[2]) : 1e9; }
 const uuid = ()=> (crypto.randomUUID? crypto.randomUUID() : 'x'+shortId()+shortId());
+
+// total on-device size of a visit's media (≈ final store-only zip size)
+async function visitSize(visitId){
+  const entries=await entriesFor(visitId);
+  let bytes=0, media=0;
+  for(const e of entries){ if(e.filename){ const rec=await dbGet('blobs', e.id); if(rec&&rec.blob){ bytes+=rec.blob.size; media++; } } }
+  return { bytes, media };
+}
+function fmtSize(b){ const u=['B','KB','MB','GB']; let i=0, n=b||0;
+  while(n>=1024 && i<u.length-1){ n/=1024; i++; }
+  return (i===0||n>=10 ? Math.round(n) : n.toFixed(1))+' '+u[i]; }
+const SIZE_WARN = 1024*1024*1024; // 1 GB — caution before WhatsApp's 2 GB doc limit / phone-memory limits
 
 /* ---------- record helpers ---------- */
 async function createVisit({date,company,engineer,location,geo}){
@@ -670,7 +693,6 @@ function openSheet(media, editEntry){
     <div class="grabber"></div>
     <h2>${isEdit?'Edit entry':(media?'Tag this '+(media.mediaType==='video'?'video':'photo'):'New note')}</h2>
     ${previewHtml}
-    <div class="field"><label>Time</label><input id="s_time" type="time" value="${esc(time)}"></div>
     <label style="display:block;font-size:13px;font-weight:600;color:#334155;margin-bottom:8px">What is this?</label>
     <div class="cat-list">${cats}</div>
     <div class="field" id="otherWrap" style="${isOther?'':'display:none'};margin-top:10px">
@@ -712,7 +734,7 @@ function openSheet(media, editEntry){
     const noteVal=$('#s_note',ov).value.trim();
     if(!category && !noteVal && !media && !(isEdit && editEntry.mediaType)){ toast('Pick a category or add a note'); return; }
     if(!category) category='Other';
-    const data={ id:isEdit?editEntry.id:undefined, time:$('#s_time',ov).value||nowHM(),
+    const data={ id:isEdit?editEntry.id:undefined, time:time,
       category, note:noteVal, geo };
     if(media){ data.mediaType=media.mediaType; data.blob=media.blob; data.mime=media.mime; data.originalName=media.name; }
     await saveEntry(state.visitId, data);
@@ -728,6 +750,7 @@ async function renderSummary(){
   if(!v) return go('home');
   setBar(v.company||'Visit','Summary & export', true);
   const folder=folderName(v);
+  const sz=await visitSize(v.id); const big=sz.bytes>=SIZE_WARN;
   app.innerHTML=`<div class="wrap screen">
     <div class="banner" style="margin-bottom:14px"><span class="b-ic">⏱</span>
       <div><b>Export before you leave site.</b> Send the zip via WhatsApp/AirDrop now —
@@ -744,7 +767,13 @@ async function renderSummary(){
     <div class="card" style="margin-top:20px">
       <div class="small muted">Will export as</div>
       <div class="slugbox" style="margin-top:4px">${esc(folder)}.zip → ${esc(folder)}/notes.md + media</div>
+      <div class="row" style="margin-top:10px;justify-content:space-between">
+        <span class="small muted">Export size</span>
+        <span class="small" style="font-weight:700">≈ ${fmtSize(sz.bytes)} · ${sz.media} ${sz.media===1?'file':'files'}</span>
+      </div>
     </div>
+    ${big?`<div class="banner" style="margin-top:12px"><span class="b-ic">⚠️</span>
+      <div><b>Large export (≈${fmtSize(sz.bytes)}).</b> Nearing WhatsApp's 2 GB document limit, and very large zips can strain phone memory while building. Export now; for huge visits, consider splitting across two visits.</div></div>`:''}
   </div>
   <div class="actionbar"><div class="inner">
     <button class="btn primary big block" id="finish">✅ Finish &amp; Export</button>
@@ -828,7 +857,8 @@ render();
 /* expose pure helpers for verification/testing */
 window.SVC={ slugify, catSlug, entryFilename, folderName, buildMarkdown, crc32, makeZip,
   blobBytes, createVisit, saveEntry, entriesFor, buildVisitZip, exportVisit, deleteVisit,
-  dbGet, dbGetAll, dbPut, CATEGORIES, go, getScale, applyScale, saveScale, openTextSize };
+  dbGet, dbGetAll, dbPut, CATEGORIES, go, getScale, applyScale, saveScale, openTextSize,
+  visitSize, fmtSize };
 </script>
 </body>
 </html>
