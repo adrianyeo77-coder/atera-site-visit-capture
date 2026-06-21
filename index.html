@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f766e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Site Visit">
+<title>Atera Site Visit Capture</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<style>
+  :root{
+    --teal:#0f766e; --teal-d:#0b574f; --teal-l:#14b8a6;
+    --bg:#eef2f5; --card:#ffffff; --ink:#0f172a; --muted:#64748b;
+    --line:#e2e8f0; --danger:#dc2626; --danger-bg:#fef2f2;
+    --warn-bg:#fffbeb; --warn-ink:#92400e; --warn-line:#fde68a;
+    --radius:14px; --shadow:0 1px 3px rgba(15,23,42,.10),0 1px 2px rgba(15,23,42,.06);
+    --safe-t:env(safe-area-inset-top,0px); --safe-b:env(safe-area-inset-bottom,0px);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg); color:var(--ink); line-height:1.45;
+    -webkit-text-size-adjust:100%;
+  }
+  button{font-family:inherit; font-size:16px; cursor:pointer}
+  input,textarea,select{font-family:inherit; font-size:16px}
+  a{color:var(--teal)}
+
+  /* App bar */
+  .appbar{
+    position:sticky; top:0; z-index:20; background:var(--teal); color:#fff;
+    padding:calc(10px + var(--safe-t)) 16px 10px; display:flex; align-items:center; gap:10px;
+    box-shadow:var(--shadow);
+  }
+  .appbar .back{
+    background:rgba(255,255,255,.15); border:0; color:#fff; width:38px; height:38px;
+    border-radius:10px; font-size:20px; line-height:1; display:flex; align-items:center; justify-content:center;
+  }
+  .appbar .back[hidden]{display:none}
+  .appbar h1{font-size:17px; margin:0; font-weight:650; flex:1; min-width:0;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .appbar .sub{font-size:12px; opacity:.85; font-weight:400}
+
+  /* Layout */
+  .wrap{max-width:560px; margin:0 auto; padding:16px 16px 140px}
+  .screen{animation:fade .18s ease}
+  @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+  /* Buttons */
+  .btn{display:inline-flex; align-items:center; justify-content:center; gap:8px;
+    border:1px solid var(--line); background:#fff; color:var(--ink);
+    border-radius:12px; padding:13px 16px; font-weight:600; min-height:50px;}
+  .btn:active{transform:translateY(1px)}
+  .btn.block{display:flex; width:100%}
+  .btn.primary{background:var(--teal); border-color:var(--teal); color:#fff}
+  .btn.big{min-height:60px; font-size:18px; border-radius:16px}
+  .btn.ghost{background:#fff; color:var(--teal); border-color:#cbd5e1}
+  .btn.subtle{background:#f1f5f9; border-color:#e2e8f0; color:#334155}
+  .btn.danger{background:var(--danger-bg); border-color:#fecaca; color:var(--danger)}
+  .btn[disabled]{opacity:.5}
+  .btn-row{display:flex; gap:10px}
+  .btn-row>.btn{flex:1}
+
+  /* Cards */
+  .card{background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
+    box-shadow:var(--shadow); padding:14px; margin-bottom:12px}
+  .card.tap{cursor:pointer}
+  .card.tap:active{background:#f8fafc}
+  .row{display:flex; gap:12px; align-items:center}
+  .grow{flex:1; min-width:0}
+  .muted{color:var(--muted)}
+  .small{font-size:13px}
+  .tiny{font-size:12px}
+  .ellip{overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .stack>*+*{margin-top:4px}
+
+  .chip{display:inline-block; font-size:11px; font-weight:700; letter-spacing:.02em;
+    padding:3px 9px; border-radius:999px; text-transform:uppercase}
+  .chip.prog{background:#fef9c3; color:#854d0e}
+  .chip.done{background:#dcfce7; color:#166534}
+
+  .section-title{font-size:13px; font-weight:700; color:var(--muted); text-transform:uppercase;
+    letter-spacing:.04em; margin:18px 2px 8px}
+
+  /* Forms */
+  .field{margin-bottom:14px}
+  .field label{display:block; font-size:13px; font-weight:600; color:#334155; margin-bottom:6px}
+  .field input, .field textarea, .field select{
+    width:100%; padding:12px; border:1px solid #cbd5e1; border-radius:10px; background:#fff; color:var(--ink)}
+  .field textarea{min-height:90px; resize:vertical}
+  .field .hint{font-size:12px; color:var(--muted); margin-top:6px}
+  .slugbox{font-family:ui-monospace,Menlo,monospace; font-size:13px; color:var(--teal);
+    background:#f0fdfa; border:1px dashed #99f6e4; border-radius:8px; padding:8px 10px; margin-top:6px;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+
+  /* Entry log */
+  .entry{display:flex; gap:12px}
+  .entry .thumb{width:64px; height:64px; border-radius:10px; object-fit:cover; background:#e2e8f0; flex:none}
+  .entry .thumb.vid{position:relative}
+  .entry .ph{width:64px; height:64px; border-radius:10px; background:#f1f5f9; border:1px dashed #cbd5e1;
+    display:flex; align-items:center; justify-content:center; font-size:24px; flex:none; color:#94a3b8}
+  .entry .time{font-variant-numeric:tabular-nums; font-weight:700; font-size:13px; color:var(--teal)}
+  .entry .cat{font-weight:600; font-size:14px}
+  .entry .note{font-size:13px; color:#475569; margin-top:2px; white-space:pre-wrap; word-break:break-word}
+  .entry .filemeta{font-size:11px; color:#94a3b8; font-family:ui-monospace,Menlo,monospace; margin-top:3px}
+  .badge{display:inline-block; font-size:10px; font-weight:700; background:#0f172a; color:#fff;
+    padding:1px 6px; border-radius:6px; margin-left:6px; vertical-align:middle}
+  .badge.geo{background:#0369a1}
+  .iconbtn{border:0; background:transparent; color:#94a3b8; font-size:18px; padding:6px; border-radius:8px}
+  .iconbtn:active{background:#f1f5f9}
+
+  /* Empty states */
+  .empty{text-align:center; padding:48px 20px; color:var(--muted)}
+  .empty .em{font-size:40px; display:block; margin-bottom:10px}
+
+  /* Sticky bottom bar */
+  .actionbar{position:fixed; left:0; right:0; bottom:0; z-index:15;
+    background:rgba(255,255,255,.96); backdrop-filter:blur(8px);
+    border-top:1px solid var(--line); padding:10px 16px calc(10px + var(--safe-b));
+    box-shadow:0 -2px 10px rgba(15,23,42,.05)}
+  .actionbar .inner{max-width:560px; margin:0 auto; display:flex; flex-direction:column; gap:8px}
+
+  /* Banner */
+  .banner{background:var(--warn-bg); border:1px solid var(--warn-line); color:var(--warn-ink);
+    border-radius:12px; padding:12px 14px; font-size:13px; display:flex; gap:10px; align-items:flex-start}
+  .banner .b-ic{font-size:18px; line-height:1}
+
+  /* Bottom sheet (tag) */
+  .overlay{position:fixed; inset:0; z-index:40; background:rgba(15,23,42,.45);
+    display:flex; align-items:flex-end; justify-content:center; animation:fade .15s ease}
+  .sheet{background:#fff; width:100%; max-width:560px; border-radius:18px 18px 0 0;
+    max-height:92vh; overflow:auto; padding:16px 16px calc(16px + var(--safe-b));
+    box-shadow:0 -8px 30px rgba(0,0,0,.25); animation:slideup .22s ease}
+  @keyframes slideup{from{transform:translateY(100%)}to{transform:none}}
+  .sheet h2{margin:2px 0 12px; font-size:18px}
+  .grabber{width:40px; height:4px; background:#cbd5e1; border-radius:2px; margin:0 auto 12px}
+  .preview{width:100%; max-height:240px; object-fit:contain; border-radius:12px; background:#0f172a; margin-bottom:14px}
+  .cat-list{display:flex; flex-direction:column; gap:8px; margin-bottom:6px}
+  .cat-btn{text-align:left; border:1px solid #cbd5e1; background:#fff; border-radius:12px;
+    padding:13px 14px; font-size:15px; min-height:50px; display:flex; align-items:center; gap:10px}
+  .cat-btn .dot{width:10px; height:10px; border-radius:50%; border:2px solid #cbd5e1; flex:none}
+  .cat-btn.sel{border-color:var(--teal); background:#f0fdfa; color:var(--teal-d); font-weight:600}
+  .cat-btn.sel .dot{border-color:var(--teal); background:var(--teal)}
+
+  /* Bullet list editor */
+  .bullets .brow{display:flex; gap:8px; margin-bottom:8px}
+  .bullets .brow input{flex:1}
+
+  /* Toast */
+  .toast{position:fixed; left:50%; bottom:calc(96px + var(--safe-b)); transform:translateX(-50%);
+    background:#0f172a; color:#fff; padding:10px 16px; border-radius:999px; font-size:14px; z-index:60;
+    box-shadow:0 6px 20px rgba(0,0,0,.3); animation:fade .15s ease; max-width:90%}
+  .install-hint{font-size:12px; color:var(--muted); text-align:center; margin-top:14px; padding:0 8px}
+</style>
+</head>
+<body>
+<div class="appbar">
+  <button class="back" id="backBtn" hidden>‹</button>
+  <div class="grow">
+    <h1 id="barTitle">Site Visits</h1>
+    <div class="sub" id="barSub">Atera Water · field capture</div>
+  </div>
+</div>
+
+<div id="app"></div>
+
+<!-- hidden native camera inputs -->
+<input id="photoInput" type="file" accept="image/*" capture="environment" hidden>
+<input id="videoInput" type="file" accept="video/*" capture="environment" hidden>
+
+<script>
+"use strict";
+/* ============================================================
+   Atera Water — Site Visit Capture (offline-first PWA)
+   Single-file. No deps. All capture/storage/zip on-device.
+   ============================================================ */
+
+/* ---------- tiny DOM helpers ---------- */
+const $  = (s,r=document)=>r.querySelector(s);
+const $$ = (s,r=document)=>[...r.querySelectorAll(s)];
+const app = $('#app');
+const esc = s => String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function toast(msg){ const t=document.createElement('div'); t.className='toast'; t.textContent=msg;
+  document.body.appendChild(t); setTimeout(()=>t.remove(),2200); }
+
+/* ---------- guided categories (from the brief) ---------- */
+const CATEGORIES = [
+  'Site entrance / context',
+  'Feed or source tank',
+  'Product / treated-water tank',
+  'Reject / discharge',
+  'Existing treatment equipment (UF / RO / WWTP / clarifier)',
+  'Equipment nameplate / specs',
+  'Power supply / electrical panel',
+  'Access route / clearance constraint',
+  'Water quality / lab report',
+  'Proposed installation location',
+  'Other (free text)'
+];
+const OTHER = 'Other (free text)';
+
+/* ---------- slug + filename helpers ---------- */
+function slugify(s){
+  return String(s||'').toLowerCase().trim()
+    .replace(/['’`]/g,'')
+    .replace(/[^a-z0-9]+/g,'-')
+    .replace(/^-+|-+$/g,'')
+    .slice(0,60) || 'visit';
+}
+function catSlug(label){ return slugify(label).slice(0,40) || 'entry'; }
+function pad2(n){ return String(n).padStart(2,'0'); }
+function nowHM(){ const d=new Date(); return pad2(d.getHours())+':'+pad2(d.getMinutes()); }
+function hhmm(t){ return String(t||'').replace(':',''); }
+function shortId(){
+  const a=new Uint8Array(4); crypto.getRandomValues(a);
+  return [...a].map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+function extFor(mime, mediaType, name){
+  const map={'image/jpeg':'jpg','image/jpg':'jpg','image/png':'png','image/heic':'heic',
+    'image/heif':'heif','image/webp':'webp','image/gif':'gif',
+    'video/mp4':'mp4','video/quicktime':'mov','video/webm':'webm','video/3gpp':'3gp'};
+  if(map[mime]) return map[mime];
+  if(name && name.includes('.')){ const e=name.split('.').pop().toLowerCase().replace(/[^a-z0-9]/g,''); if(e) return e; }
+  return mediaType==='video' ? 'mp4' : 'jpg';
+}
+function entryFilename(e){
+  if(!e.mediaType) return null;
+  return `${hhmm(e.time)}-${e.categorySlug||'entry'}-${e.shortid}.${e.ext}`;
+}
+function folderName(visit){ return `${visit.date}-${slugify(visit.company)}`; }
+
+/* ---------- IndexedDB layer ---------- */
+const DB_NAME='atera-site-visits', DB_VER=1;
+let _dbp=null;
+function openDB(){
+  if(_dbp) return _dbp;
+  _dbp=new Promise((res,rej)=>{
+    const r=indexedDB.open(DB_NAME, DB_VER);
+    r.onupgradeneeded=()=>{
+      const db=r.result;
+      if(!db.objectStoreNames.contains('visits')) db.createObjectStore('visits',{keyPath:'id'});
+      if(!db.objectStoreNames.contains('entries')){
+        const s=db.createObjectStore('entries',{keyPath:'id'}); s.createIndex('visitId','visitId',{unique:false});
+      }
+      if(!db.objectStoreNames.contains('blobs')) db.createObjectStore('blobs',{keyPath:'id'});
+    };
+    r.onsuccess=()=>res(r.result);
+    r.onerror=()=>rej(r.error);
+  });
+  return _dbp;
+}
+function tx(store, mode){ return openDB().then(db=>db.transaction(store,mode).objectStore(store)); }
+const reqP = req => new Promise((res,rej)=>{ req.onsuccess=()=>res(req.result); req.onerror=()=>rej(req.error); });
+async function dbPut(store,val){ const s=await tx(store,'readwrite'); await reqP(s.put(val)); return val; }
+async function dbGet(store,key){ const s=await tx(store,'readonly'); return reqP(s.get(key)); }
+async function dbGetAll(store){ const s=await tx(store,'readonly'); return reqP(s.getAll()); }
+async function dbDelete(store,key){ const s=await tx(store,'readwrite'); return reqP(s.delete(key)); }
+async function entriesFor(visitId){
+  const s=await tx('entries','readonly');
+  const all=await reqP(s.index('visitId').getAll(visitId));
+  return all.sort(byTime);
+}
+function byTime(a,b){
+  const ma=tmin(a.time), mb=tmin(b.time);
+  if(ma!==mb) return ma-mb;
+  return (a.seq||0)-(b.seq||0);
+}
+function tmin(t){ const m=/^(\d{1,2}):(\d{2})/.exec(t||''); return m? (+m[1])*60+(+m[2]) : 1e9; }
+const uuid = ()=> (crypto.randomUUID? crypto.randomUUID() : 'x'+shortId()+shortId());
+
+/* ---------- record helpers ---------- */
+async function createVisit({date,company,engineer,location}){
+  const v={ id:uuid(), date, company, engineer:engineer||'', location:location||'',
+    status:'in-progress', keyFindings:[], outstanding:[], exported:false,
+    createdAt:Date.now(), updatedAt:Date.now() };
+  await dbPut('visits',v); return v;
+}
+async function saveEntry(visitId, data){
+  // data: {id?, time, category, note, mediaType, blob?, mime?, originalName?, geo?, shortid?, ext?}
+  const existing = data.id ? await dbGet('entries', data.id) : null;
+  const e = existing || { id:uuid(), visitId, seq:Date.now() };
+  e.time = data.time || e.time || nowHM();
+  e.category = data.category || OTHER;
+  e.categorySlug = catSlug(e.category===OTHER ? (data.category||'other') : e.category);
+  e.note = (data.note||'').trim();
+  e.geo = data.geo!==undefined ? data.geo : (e.geo||null);
+  if(data.mediaType){
+    e.mediaType = data.mediaType;
+    e.shortid = e.shortid || data.shortid || shortId();
+    if(data.blob){ e.ext = extFor(data.mime||data.blob.type, data.mediaType, data.originalName);
+      await dbPut('blobs',{id:e.id, blob:data.blob}); }
+    else if(data.ext){ e.ext = data.ext; }
+  } else if(data.mediaType===null){ e.mediaType=null; }
+  e.filename = entryFilename(e);
+  await dbPut('entries', e);
+  await touchVisit(visitId);
+  return e;
+}
+async function deleteEntry(id){ await dbDelete('entries',id); await dbDelete('blobs',id); }
+async function touchVisit(id){ const v=await dbGet('visits',id); if(v){ v.updatedAt=Date.now(); await dbPut('visits',v); } }
+async function deleteVisit(id){
+  const es=await entriesFor(id);
+  for(const e of es){ await dbDelete('blobs',e.id); await dbDelete('entries',e.id); }
+  await dbDelete('visits',id);
+}
+
+/* ---------- markdown builder (matches site-visits/ format) ---------- */
+function buildMarkdown(visit, entries){
+  const L=[];
+  L.push(`# Site Visit — ${visit.company||'Untitled'}`);
+  L.push(`**Date:** ${visit.date}`);
+  if(visit.location) L.push(`**Location:** ${visit.location}`);
+  if(visit.engineer) L.push(`**Engineer:** ${visit.engineer}`);
+  L.push(''); L.push('---'); L.push(''); L.push('## Notes'); L.push('');
+  for(const e of entries){
+    L.push(`### ${e.time} — ${e.category}`);
+    if(e.note){ for(const ln of e.note.split(/\r?\n/)){ const t=ln.trim(); if(t) L.push(`- ${t}`); } }
+    if(e.filename){ const verb = e.mediaType==='video' ? 'Video saved' : 'Photo saved';
+      L.push(`- ${verb}: \`${e.filename}\``); }
+    if(e.geo) L.push(`- GPS: ${e.geo.lat.toFixed(5)}, ${e.geo.lng.toFixed(5)}`);
+    L.push('');
+  }
+  L.push('---'); L.push(''); L.push('## Visit Summary');
+  L.push('### Key Findings');
+  const kf=(visit.keyFindings||[]).map(s=>s.trim()).filter(Boolean);
+  if(kf.length) kf.forEach(b=>L.push(`- ${b}`)); else L.push('- ');
+  L.push('### Outstanding');
+  const os=(visit.outstanding||[]).map(s=>s.trim()).filter(Boolean);
+  if(os.length) os.forEach(b=>L.push(`- ${b}`)); else L.push('- ');
+  L.push('');
+  return L.join('\n');
+}
+
+/* ---------- store-only ZIP writer (no deps, no compression) ---------- */
+const CRC_TABLE=(()=>{ const t=new Uint32Array(256);
+  for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1); t[n]=c>>>0; }
+  return t; })();
+function crc32(u8){ let c=0xFFFFFFFF; for(let i=0;i<u8.length;i++) c=CRC_TABLE[(c^u8[i])&0xFF]^(c>>>8); return (c^0xFFFFFFFF)>>>0; }
+function dosDT(d){
+  const time=(d.getHours()<<11)|(d.getMinutes()<<5)|(d.getSeconds()>>1);
+  const date=((d.getFullYear()-1980)<<9)|((d.getMonth()+1)<<5)|d.getDate();
+  return {time:time&0xFFFF, date:date&0xFFFF};
+}
+function makeZip(files){
+  // files: [{name, data:Uint8Array, date?:Date}]
+  const enc=new TextEncoder(); const parts=[]; const central=[]; let offset=0;
+  const now=new Date();
+  for(const f of files){
+    const nameBytes=enc.encode(f.name); const data=f.data||new Uint8Array(0);
+    const crc=crc32(data); const {time,date}=dosDT(f.date||now);
+    const h=new Uint8Array(30+nameBytes.length); const dv=new DataView(h.buffer);
+    dv.setUint32(0,0x04034b50,true); dv.setUint16(4,20,true); dv.setUint16(6,0x0800,true);
+    dv.setUint16(8,0,true); dv.setUint16(10,time,true); dv.setUint16(12,date,true);
+    dv.setUint32(14,crc,true); dv.setUint32(18,data.length,true); dv.setUint32(22,data.length,true);
+    dv.setUint16(26,nameBytes.length,true); dv.setUint16(28,0,true); h.set(nameBytes,30);
+    parts.push(h, data);
+    central.push({nameBytes,crc,size:data.length,time,date,offset,dir:f.name.endsWith('/')});
+    offset += h.length + data.length;
+  }
+  const cdStart=offset; const cdParts=[]; let cdSize=0;
+  for(const c of central){
+    const h=new Uint8Array(46+c.nameBytes.length); const dv=new DataView(h.buffer);
+    dv.setUint32(0,0x02014b50,true); dv.setUint16(4,20,true); dv.setUint16(6,20,true);
+    dv.setUint16(8,0x0800,true); dv.setUint16(10,0,true); dv.setUint16(12,c.time,true);
+    dv.setUint16(14,c.date,true); dv.setUint32(16,c.crc,true); dv.setUint32(20,c.size,true);
+    dv.setUint32(24,c.size,true); dv.setUint16(28,c.nameBytes.length,true);
+    dv.setUint16(30,0,true); dv.setUint16(32,0,true); dv.setUint16(34,0,true);
+    dv.setUint16(36,0,true); dv.setUint32(38, c.dir?0x10:0x20, true); dv.setUint32(42,c.offset,true);
+    h.set(c.nameBytes,46); cdParts.push(h); cdSize+=h.length;
+  }
+  const eocd=new Uint8Array(22); const dv=new DataView(eocd.buffer);
+  dv.setUint32(0,0x06054b50,true); dv.setUint16(8,central.length,true);
+  dv.setUint16(10,central.length,true); dv.setUint32(12,cdSize,true); dv.setUint32(16,cdStart,true);
+  return new Blob([...parts,...cdParts,eocd],{type:'application/zip'});
+}
+const blobBytes = async b => new Uint8Array(await b.arrayBuffer());
+
+/* ---------- export ---------- */
+async function buildVisitZip(visitId){
+  const visit=await dbGet('visits',visitId);
+  const entries=await entriesFor(visitId);
+  const folder=folderName(visit);
+  const md=buildMarkdown(visit, entries);
+  const files=[ {name:folder+'/'}, {name:`${folder}/notes.md`, data:new TextEncoder().encode(md)} ];
+  for(const e of entries){
+    if(!e.filename) continue;
+    const rec=await dbGet('blobs', e.id);
+    if(!rec||!rec.blob) continue;
+    files.push({name:`${folder}/${e.filename}`, data:await blobBytes(rec.blob), date:new Date(e.seq)});
+  }
+  return {visit, folder, zip:makeZip(files)};
+}
+async function exportVisit(visitId){
+  const {visit, folder, zip}=await buildVisitZip(visitId);
+  const fname=`${folder}.zip`;
+  visit.status='completed'; visit.exported=true; visit.updatedAt=Date.now();
+  await dbPut('visits',visit);
+  const file=new File([zip], fname, {type:'application/zip'});
+  if(navigator.canShare && navigator.canShare({files:[file]})){
+    try{
+      await navigator.share({files:[file], title:`Site Visit — ${visit.company}`,
+        text:`Atera site visit: ${folder}`});
+      return {shared:true};
+    }catch(err){ if(err && err.name==='AbortError') return {aborted:true}; }
+  }
+  // fallback: download
+  const url=URL.createObjectURL(zip); const a=document.createElement('a');
+  a.href=url; a.download=fname; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),5000);
+  return {downloaded:true};
+}
+
+/* ============================================================
+   UI / navigation
+   ============================================================ */
+const state={ screen:'home', visitId:null, urls:[] };
+function freeUrls(){ state.urls.forEach(u=>URL.revokeObjectURL(u)); state.urls=[]; }
+function objUrl(blob){ const u=URL.createObjectURL(blob); state.urls.push(u); return u; }
+
+function setBar(title, sub, showBack){
+  $('#barTitle').textContent=title;
+  $('#barSub').textContent=sub||'';
+  $('#backBtn').hidden=!showBack;
+}
+function go(screen, visitId){ state.screen=screen; if(visitId!==undefined) state.visitId=visitId; render(); }
+
+async function render(){
+  freeUrls();
+  if(state.screen==='home') return renderHome();
+  if(state.screen==='cover') return renderCover();
+  if(state.screen==='capture') return renderCapture();
+  if(state.screen==='summary') return renderSummary();
+  renderHome();
+}
+
+/* ---------- Home ---------- */
+async function renderHome(){
+  setBar('Site Visits','Atera Water · field capture', false);
+  const visits=(await dbGetAll('visits')).sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));
+  const counts={};
+  for(const v of visits){ counts[v.id]=(await entriesFor(v.id)).length; }
+  const unsent=visits.filter(v=>!v.exported).length;
+  let html=`<div class="wrap screen">`;
+  if(unsent>0){
+    html+=`<div class="banner" style="margin-bottom:14px"><span class="b-ic">📤</span>
+      <div>You have <b>${unsent}</b> visit${unsent>1?'s':''} not yet exported.
+      Export &amp; send before leaving site — on-device storage isn't guaranteed long-term.</div></div>`;
+  }
+  if(!visits.length){
+    html+=`<div class="empty"><span class="em">📋</span>
+      <div style="font-weight:600;color:#334155">No visits yet</div>
+      <div class="small">Tap “New Visit” to start capturing.</div></div>`;
+  }else{
+    for(const v of visits){
+      const done=v.status==='completed';
+      html+=`<div class="card tap" data-open="${v.id}">
+        <div class="row">
+          <div class="grow stack">
+            <div class="row" style="gap:8px">
+              <span class="grow ellip" style="font-weight:650;font-size:16px">${esc(v.company||'Untitled')}</span>
+              <span class="chip ${done?'done':'prog'}">${done?'done':'in progress'}</span>
+            </div>
+            <div class="small muted ellip">${esc(v.date)}${v.location?' · '+esc(v.location):''}</div>
+            <div class="tiny muted">${counts[v.id]} ${counts[v.id]===1?'entry':'entries'}${v.exported?' · exported':''}</div>
+          </div>
+        </div>
+        <div class="btn-row" style="margin-top:12px">
+          <button class="btn subtle" data-open="${v.id}">${done?'View':'Resume'}</button>
+          <button class="btn ghost" data-export="${v.id}">Export</button>
+          <button class="btn danger" data-del="${v.id}" style="flex:0 0 52px">🗑</button>
+        </div>
+      </div>`;
+    }
+  }
+  html+=`<p class="install-hint">Tip: add this app to your Home Screen for full-screen, offline use.</p>`;
+  html+=`</div>
+  <div class="actionbar"><div class="inner">
+    <button class="btn primary big block" id="newVisit">+ New Visit</button>
+  </div></div>`;
+  app.innerHTML=html;
+
+  $('#newVisit').onclick=()=>go('cover', null);
+  $$('[data-open]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); openVisit(b.dataset.open); });
+  $$('[data-export]').forEach(b=>b.onclick=async e=>{ e.stopPropagation();
+    b.disabled=true; b.textContent='…';
+    const r=await exportVisit(b.dataset.export);
+    toast(r.shared?'Shared ✓':r.downloaded?'Downloaded ✓':'Cancelled');
+    render();
+  });
+  $$('[data-del]').forEach(b=>b.onclick=async e=>{ e.stopPropagation();
+    if(confirm('Delete this visit and all its photos? This cannot be undone.')){ await deleteVisit(b.dataset.del); render(); }
+  });
+}
+async function openVisit(id){ const v=await dbGet('visits',id); if(!v) return; go('capture', id); }
+
+/* ---------- Cover (new visit) ---------- */
+function todayStr(){ const d=new Date(); return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`; }
+function renderCover(){
+  setBar('New Visit','Cover details', true);
+  app.innerHTML=`<div class="wrap screen">
+    <div class="card">
+      <div class="field"><label>Date</label><input id="f_date" type="date" value="${todayStr()}"></div>
+      <div class="field"><label>Site / Company name</label>
+        <input id="f_company" type="text" placeholder="e.g. Akebono Brake" autocomplete="off"></div>
+      <div class="field"><label>Engineer name</label>
+        <input id="f_eng" type="text" placeholder="Your name" autocomplete="off"></div>
+      <div class="field"><label>Location / address</label>
+        <input id="f_loc" type="text" placeholder="e.g. Karawang, Indonesia" autocomplete="off"></div>
+      <div class="field" style="margin-bottom:0">
+        <label>Export folder (auto)</label>
+        <div class="slugbox" id="slugPrev">—</div>
+        <div class="hint">Your zip will unzip to this folder, matching the site-visits format.</div>
+      </div>
+    </div>
+  </div>
+  <div class="actionbar"><div class="inner">
+    <button class="btn primary big block" id="start">Start Visit →</button>
+    <button class="btn subtle block" id="cancel">Cancel</button>
+  </div></div>`;
+
+  const upd=()=>{ const d=$('#f_date').value||todayStr(); const c=$('#f_company').value;
+    $('#slugPrev').textContent = c.trim()? `${d}-${slugify(c)}` : '—'; };
+  $('#f_company').addEventListener('input',upd); $('#f_date').addEventListener('input',upd); upd();
+  $('#cancel').onclick=()=>go('home');
+  $('#backBtn').onclick=()=>go('home');
+  $('#start').onclick=async()=>{
+    const company=$('#f_company').value.trim();
+    if(!company){ toast('Enter a site / company name'); $('#f_company').focus(); return; }
+    const v=await createVisit({ date:$('#f_date').value||todayStr(), company,
+      engineer:$('#f_eng').value.trim(), location:$('#f_loc').value.trim() });
+    go('capture', v.id);
+  };
+}
+
+/* ---------- Capture loop ---------- */
+let pendingMedia=null; // {blob, mediaType, mime, name}
+async function renderCapture(){
+  const v=await dbGet('visits', state.visitId);
+  if(!v) return go('home');
+  setBar(v.company||'Visit', `${v.date} · capture log`, true);
+  const entries=await entriesFor(v.id);
+  let rows='';
+  if(!entries.length){
+    rows=`<div class="empty"><span class="em">📸</span>
+      <div style="font-weight:600;color:#334155">No entries yet</div>
+      <div class="small">Tap “+ Photo” to capture the first one.</div></div>`;
+  }else{
+    for(const e of entries){
+      let thumb=`<div class="ph">📝</div>`;
+      if(e.mediaType){
+        const rec=await dbGet('blobs',e.id);
+        if(rec&&rec.blob){
+          if(e.mediaType==='video'){
+            thumb=`<video class="thumb" src="${objUrl(rec.blob)}" muted playsinline preload="metadata"></video>`;
+          }else{
+            thumb=`<img class="thumb" src="${objUrl(rec.blob)}" alt="">`;
+          }
+        }else thumb=`<div class="ph">${e.mediaType==='video'?'🎬':'🖼'}</div>`;
+      }
+      rows+=`<div class="card"><div class="entry">
+        ${thumb}
+        <div class="grow" data-edit="${e.id}" style="cursor:pointer">
+          <div class="time">${esc(e.time)}${e.mediaType==='video'?'<span class="badge">VIDEO</span>':''}${e.geo?'<span class="badge geo">GPS</span>':''}</div>
+          <div class="cat">${esc(e.category)}</div>
+          ${e.note?`<div class="note">${esc(e.note)}</div>`:''}
+          ${e.filename?`<div class="filemeta">${esc(e.filename)}</div>`:''}
+        </div>
+        <button class="iconbtn" data-delentry="${e.id}" title="Delete">🗑</button>
+      </div></div>`;
+    }
+  }
+  app.innerHTML=`<div class="wrap screen">
+    <div class="section-title">Capture log · ${entries.length} ${entries.length===1?'entry':'entries'}</div>
+    ${rows}
+  </div>
+  <div class="actionbar"><div class="inner">
+    <button class="btn primary big block" id="addPhoto">📷 + Photo</button>
+    <div class="btn-row">
+      <button class="btn ghost" id="addVideo">🎬 + Video</button>
+      <button class="btn ghost" id="addNote">📝 + Note</button>
+    </div>
+    <button class="btn subtle block" id="toSummary">Review &amp; Export →</button>
+  </div></div>`;
+
+  $('#backBtn').onclick=()=>go('home');
+  $('#addPhoto').onclick=()=>$('#photoInput').click();
+  $('#addVideo').onclick=()=>$('#videoInput').click();
+  $('#addNote').onclick=()=>openSheet(null,null);
+  $('#toSummary').onclick=()=>go('summary', v.id);
+  $$('[data-edit]').forEach(el=>el.onclick=async()=>{ const e=await dbGet('entries',el.dataset.edit); if(e) openSheet(null,e); });
+  $$('[data-delentry]').forEach(b=>b.onclick=async()=>{ if(confirm('Delete this entry?')){ await deleteEntry(b.dataset.delentry); renderCapture(); }});
+}
+
+function handleFile(input, mediaType){
+  const f=input.files && input.files[0];
+  input.value='';
+  if(!f) return;
+  pendingMedia={ blob:f, mediaType, mime:f.type, name:f.name };
+  openSheet(pendingMedia, null);
+}
+$('#photoInput').addEventListener('change', e=>handleFile(e.target,'photo'));
+$('#videoInput').addEventListener('change', e=>handleFile(e.target,'video'));
+
+/* ---------- Tag sheet (modal) ---------- */
+function openSheet(media, editEntry){
+  // media: pending {blob,mediaType,...} for new media entry; editEntry: existing entry to edit
+  let selCat = editEntry ? editEntry.category : '';
+  let geo = editEntry ? (editEntry.geo||null) : null;
+  const isEdit=!!editEntry;
+  const time = editEntry ? editEntry.time : nowHM();
+  const note = editEntry ? editEntry.note : '';
+  const isOther = selCat && !CATEGORIES.includes(selCat) ? true : selCat===OTHER;
+  const otherVal = (selCat && !CATEGORIES.includes(selCat)) ? selCat : '';
+
+  let previewHtml='';
+  if(media){
+    const url=objUrl(media.blob);
+    previewHtml = media.mediaType==='video'
+      ? `<video class="preview" src="${url}" controls playsinline></video>`
+      : `<img class="preview" src="${url}" alt="preview">`;
+  }else if(isEdit && editEntry.mediaType){
+    previewHtml=`<div class="banner" style="margin-bottom:12px"><span class="b-ic">${editEntry.mediaType==='video'?'🎬':'🖼'}</span><div>Media kept: <code>${esc(editEntry.filename||'')}</code></div></div>`;
+  }
+
+  const cats = CATEGORIES.map(c=>{
+    const sel=(c===OTHER && isOther) || c===selCat;
+    return `<button class="cat-btn ${sel?'sel':''}" data-cat="${esc(c)}"><span class="dot"></span><span>${esc(c)}</span></button>`;
+  }).join('');
+
+  const ov=document.createElement('div'); ov.className='overlay';
+  ov.innerHTML=`<div class="sheet" role="dialog" aria-modal="true">
+    <div class="grabber"></div>
+    <h2>${isEdit?'Edit entry':(media?'Tag this '+(media.mediaType==='video'?'video':'photo'):'New note')}</h2>
+    ${previewHtml}
+    <div class="field"><label>Time</label><input id="s_time" type="time" value="${esc(time)}"></div>
+    <label style="display:block;font-size:13px;font-weight:600;color:#334155;margin-bottom:8px">What is this?</label>
+    <div class="cat-list">${cats}</div>
+    <div class="field" id="otherWrap" style="${isOther?'':'display:none'};margin-top:10px">
+      <label>Describe (Other)</label><input id="s_other" type="text" placeholder="Free text label" value="${esc(otherVal)}">
+    </div>
+    <div class="field"><label>Note</label><textarea id="s_note" placeholder="Observations, labels, specs… (one line per bullet)">${esc(note)}</textarea></div>
+    <button class="btn subtle block" id="s_geo" style="margin-bottom:14px">📍 ${geo?`GPS added (${geo.lat.toFixed(4)}, ${geo.lng.toFixed(4)})`:'Add GPS location (optional)'}</button>
+    <div class="btn-row">
+      <button class="btn subtle" id="s_cancel">Cancel</button>
+      <button class="btn primary" id="s_save" style="flex:2">${isEdit?'Save changes':'Save entry'}</button>
+    </div>
+  </div>`;
+  document.body.appendChild(ov);
+
+  const close=()=>{ ov.remove(); pendingMedia=null; };
+  ov.addEventListener('click', e=>{ if(e.target===ov) close(); });
+  $('#s_cancel',ov).onclick=close;
+
+  $$('.cat-btn',ov).forEach(b=>b.onclick=()=>{
+    selCat=b.dataset.cat;
+    $$('.cat-btn',ov).forEach(x=>x.classList.remove('sel')); b.classList.add('sel');
+    $('#otherWrap',ov).style.display = (selCat===OTHER)?'':'none';
+    if(selCat===OTHER) $('#s_other',ov).focus();
+  });
+
+  $('#s_geo',ov).onclick=()=>{
+    if(!navigator.geolocation){ toast('Geolocation not available'); return; }
+    const btn=$('#s_geo',ov); btn.textContent='📍 Locating…';
+    navigator.geolocation.getCurrentPosition(
+      p=>{ geo={lat:p.coords.latitude,lng:p.coords.longitude}; btn.textContent=`📍 GPS added (${geo.lat.toFixed(4)}, ${geo.lng.toFixed(4)})`; },
+      ()=>{ btn.textContent='📍 Add GPS location (optional)'; toast('Location unavailable'); },
+      {enableHighAccuracy:true, timeout:8000, maximumAge:60000}
+    );
+  };
+
+  $('#s_save',ov).onclick=async()=>{
+    let category=selCat;
+    if(selCat===OTHER){ const o=$('#s_other',ov).value.trim(); category=o||'Other'; }
+    const noteVal=$('#s_note',ov).value.trim();
+    if(!category && !noteVal && !media && !(isEdit && editEntry.mediaType)){ toast('Pick a category or add a note'); return; }
+    if(!category) category='Other';
+    const data={ id:isEdit?editEntry.id:undefined, time:$('#s_time',ov).value||nowHM(),
+      category, note:noteVal, geo };
+    if(media){ data.mediaType=media.mediaType; data.blob=media.blob; data.mime=media.mime; data.originalName=media.name; }
+    await saveEntry(state.visitId, data);
+    close();
+    toast(isEdit?'Updated ✓':'Saved ✓');
+    renderCapture();
+  };
+}
+
+/* ---------- Summary + export ---------- */
+async function renderSummary(){
+  const v=await dbGet('visits', state.visitId);
+  if(!v) return go('home');
+  setBar(v.company||'Visit','Summary & export', true);
+  const folder=folderName(v);
+  app.innerHTML=`<div class="wrap screen">
+    <div class="banner" style="margin-bottom:14px"><span class="b-ic">⏱</span>
+      <div><b>Export before you leave site.</b> Send the zip via WhatsApp/AirDrop now —
+      un-exported visits may be evicted by iOS under low storage.</div></div>
+
+    <div class="section-title">Key Findings</div>
+    <div class="bullets" id="kf"></div>
+    <button class="btn subtle block" id="addKf" style="margin-bottom:8px">+ Add finding</button>
+
+    <div class="section-title">Outstanding</div>
+    <div class="bullets" id="os"></div>
+    <button class="btn subtle block" id="addOs">+ Add item</button>
+
+    <div class="card" style="margin-top:20px">
+      <div class="small muted">Will export as</div>
+      <div class="slugbox" style="margin-top:4px">${esc(folder)}.zip → ${esc(folder)}/notes.md + media</div>
+    </div>
+  </div>
+  <div class="actionbar"><div class="inner">
+    <button class="btn primary big block" id="finish">✅ Finish &amp; Export</button>
+    <button class="btn subtle block" id="back2">← Back to capture</button>
+  </div></div>`;
+
+  const kfWrap=$('#kf'), osWrap=$('#os');
+  const addRow=(wrap,val)=>{
+    const row=document.createElement('div'); row.className='brow';
+    row.innerHTML=`<input type="text" value="${esc(val||'')}" placeholder="Type a bullet…">
+      <button class="btn danger" style="flex:0 0 48px;min-height:46px">✕</button>`;
+    row.querySelector('button').onclick=()=>row.remove();
+    wrap.appendChild(row); return row;
+  };
+  ((v.keyFindings&&v.keyFindings.length)?v.keyFindings:['']).forEach(x=>addRow(kfWrap,x));
+  ((v.outstanding&&v.outstanding.length)?v.outstanding:['']).forEach(x=>addRow(osWrap,x));
+
+  $('#addKf').onclick=()=>addRow(kfWrap,'').querySelector('input').focus();
+  $('#addOs').onclick=()=>addRow(osWrap,'').querySelector('input').focus();
+  const collect=wrap=>$$('input',wrap).map(i=>i.value.trim()).filter(Boolean);
+  const persist=async()=>{ v.keyFindings=collect(kfWrap); v.outstanding=collect(osWrap); v.updatedAt=Date.now(); await dbPut('visits',v); };
+
+  $('#backBtn').onclick=async()=>{ await persist(); go('capture', v.id); };
+  $('#back2').onclick=async()=>{ await persist(); go('capture', v.id); };
+  $('#finish').onclick=async()=>{
+    await persist();
+    const btn=$('#finish'); btn.disabled=true; btn.textContent='Building zip…';
+    try{
+      const r=await exportVisit(v.id);
+      toast(r.shared?'Shared ✓':r.downloaded?'Downloaded ✓':r.aborted?'Share cancelled':'Done');
+      go('home');
+    }catch(err){ console.error(err); toast('Export failed: '+(err.message||err)); btn.disabled=false; btn.textContent='✅ Finish & Export'; }
+  };
+}
+
+/* ---------- boot ---------- */
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
+}
+if(navigator.storage && navigator.storage.persist){ navigator.storage.persist().catch(()=>{}); }
+
+render();
+
+/* expose pure helpers for verification/testing */
+window.SVC={ slugify, catSlug, entryFilename, folderName, buildMarkdown, crc32, makeZip,
+  blobBytes, createVisit, saveEntry, entriesFor, buildVisitZip, exportVisit, deleteVisit,
+  dbGet, dbGetAll, dbPut, CATEGORIES, go };
+</script>
+</body>
+</html>

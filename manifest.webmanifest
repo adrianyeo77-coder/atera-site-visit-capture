@@ -1,0 +1,16 @@
+{
+  "name": "Atera Site Visit Capture",
+  "short_name": "Site Visit",
+  "description": "Offline-first field capture for Atera Water site visits — photo, tag, export as a zip.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f766e",
+  "theme_color": "#0f766e",
+  "icons": [
+    { "src": "./icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
