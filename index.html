@@ -248,23 +248,20 @@ const STAFF = ['Adrian'];
 /* ---------- site survey (checklist items 6–19, engineer fills in) ---------- */
 const SURVEY = [
   { group:'Project & stakeholder', items:[
-    {k:'stakeholders', label:'Decision maker vs site contact vs end user — names, roles, contacts', ml:true},
-    {k:'deadline',     label:'Target commissioning date & hard deadlines (regulatory, expansion, audit)'},
-    {k:'budget',       label:'Budget indication / CAPEX'},
-    {k:'trigger',      label:'What triggered this project (quality, capacity, compliance, cost)', ml:true}
+    {k:'stakeholders', label:'Stakeholder name and role', ml:true},
+    {k:'deadline',     label:'Target commissioning date'},
+    {k:'budget',       label:'Does the customer have budget for this already?'},
+    {k:'trigger',      label:'Reason for project', ml:true}
   ]},
   { group:'Water source', items:[
     {k:'source_type',  label:'Source type — borewell / municipal / surface / sea / recycled'},
-    {k:'source_count', label:'Number of sources, switching arrangement'},
-    {k:'samples',      label:'Water samples taken (each source: raw, post existing treatment)'},
-    {k:'quick_test',   label:'On-site quick test — TDS, Turbidity'},
-    {k:'flow',         label:'Daily flow available vs required (peak + average)'},
-    {k:'reliability',  label:'Source reliability — outages, seasonal variation (last 12 months)', ml:true},
-    {k:'lab_reports',  label:'Existing analysis / latest lab report obtained'}
+    {k:'tds',          label:'On-site test — TDS'},
+    {k:'turbidity',    label:'On-site test — Turbidity'},
+    {k:'reliability',  label:'Water source reliability', ml:true}
   ]},
   { group:'Demand & duty', items:[
-    {k:'capacity',       label:'Required product water capacity (m³/hr, m³/day) — peak vs average'},
-    {k:'hours',          label:'Operating hours/day, days/week, shift pattern'},
+    {k:'total_flow',     label:'Total flow required'},
+    {k:'hours',          label:'How many hours would they like the system to operate'},
     {k:'quality_target', label:'Product quality target — parameter list & limits (in writing)', ml:true}
   ]}
 ];
