@@ -213,6 +213,9 @@ const CATEGORIES = [
 ];
 const OTHER = 'Other (free text)';
 
+/* ---------- staff (dropdown options — add names here as the team grows) ---------- */
+const STAFF = ['Adrian'];
+
 /* ---------- slug + filename helpers ---------- */
 function slugify(s){
   return String(s||'').toLowerCase().trim()
@@ -283,8 +286,8 @@ function tmin(t){ const m=/^(\d{1,2}):(\d{2})/.exec(t||''); return m? (+m[1])*60
 const uuid = ()=> (crypto.randomUUID? crypto.randomUUID() : 'x'+shortId()+shortId());
 
 /* ---------- record helpers ---------- */
-async function createVisit({date,company,engineer,location}){
-  const v={ id:uuid(), date, company, engineer:engineer||'', location:location||'',
+async function createVisit({date,company,engineer,location,geo}){
+  const v={ id:uuid(), date, company, engineer:engineer||'', location:location||'', geo:geo||null,
     status:'in-progress', keyFindings:[], outstanding:[], exported:false,
     createdAt:Date.now(), updatedAt:Date.now() };
   await dbPut('visits',v); return v;
@@ -324,7 +327,8 @@ function buildMarkdown(visit, entries){
   L.push(`# Site Visit — ${visit.company||'Untitled'}`);
   L.push(`**Date:** ${visit.date}`);
   if(visit.location) L.push(`**Location:** ${visit.location}`);
-  if(visit.engineer) L.push(`**Engineer:** ${visit.engineer}`);
+  if(visit.geo) L.push(`**Map:** https://maps.apple.com/?q=${visit.geo.lat},${visit.geo.lng}`);
+  if(visit.engineer) L.push(`**Staff:** ${visit.engineer}`);
   L.push(''); L.push('---'); L.push(''); L.push('## Notes'); L.push('');
   for(const e of entries){
     L.push(`### ${e.time} — ${e.category}`);
@@ -516,10 +520,12 @@ function renderCover(){
       <div class="field"><label>Date</label><input id="f_date" type="date" value="${todayStr()}"></div>
       <div class="field"><label>Site / Company name</label>
         <input id="f_company" type="text" placeholder="e.g. Akebono Brake" autocomplete="off"></div>
-      <div class="field"><label>Engineer name</label>
-        <input id="f_eng" type="text" placeholder="Your name" autocomplete="off"></div>
+      <div class="field"><label>Staff name</label>
+        <select id="f_eng">${STAFF.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('')}</select></div>
       <div class="field"><label>Location / address</label>
-        <input id="f_loc" type="text" placeholder="e.g. Karawang, Indonesia" autocomplete="off"></div>
+        <input id="f_loc" type="text" placeholder="e.g. Karawang, Indonesia" autocomplete="off">
+        <button class="btn subtle block" id="f_gps" type="button" style="margin-top:8px">📍 Use my location (GPS)</button>
+        <div class="hint" id="gpsHint"></div></div>
       <div class="field" style="margin-bottom:0">
         <label>Export folder (auto)</label>
         <div class="slugbox" id="slugPrev">—</div>
@@ -537,11 +543,29 @@ function renderCover(){
   $('#f_company').addEventListener('input',upd); $('#f_date').addEventListener('input',upd); upd();
   $('#cancel').onclick=()=>go('home');
   $('#backBtn').onclick=()=>go('home');
+
+  let coverGeo=null;
+  $('#f_gps').onclick=()=>{
+    if(!navigator.geolocation){ $('#gpsHint').textContent='GPS not available on this device.'; return; }
+    const btn=$('#f_gps'), label=btn.textContent; btn.disabled=true; btn.textContent='📍 Locating…';
+    $('#gpsHint').textContent='';
+    navigator.geolocation.getCurrentPosition(pos=>{
+      const {latitude:la,longitude:ln,accuracy:ac}=pos.coords;
+      coverGeo={lat:la,lng:ln,acc:ac};
+      $('#f_loc').value=`${la.toFixed(6)}, ${ln.toFixed(6)}`;
+      $('#gpsHint').innerHTML=`✓ GPS captured (±${Math.round(ac)} m) · <a href="https://maps.apple.com/?q=${la},${ln}" target="_blank" rel="noopener">open in Maps</a>`;
+      btn.disabled=false; btn.textContent=label;
+    }, err=>{
+      $('#gpsHint').textContent='Couldn’t get location ('+(err.message||'permission denied')+'). Type it manually instead.';
+      btn.disabled=false; btn.textContent=label;
+    }, {enableHighAccuracy:true, timeout:15000, maximumAge:0});
+  };
+
   $('#start').onclick=async()=>{
     const company=$('#f_company').value.trim();
     if(!company){ toast('Enter a site / company name'); $('#f_company').focus(); return; }
     const v=await createVisit({ date:$('#f_date').value||todayStr(), company,
-      engineer:$('#f_eng').value.trim(), location:$('#f_loc').value.trim() });
+      engineer:$('#f_eng').value, location:$('#f_loc').value.trim(), geo:coverGeo });
     go('capture', v.id);
   };
 }
