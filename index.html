@@ -831,6 +831,11 @@ async function renderSummary(){
   $('#back2').onclick=async()=>{ await persist(); go('capture', v.id); };
   $('#finish').onclick=async()=>{
     await persist();
+    const miss=keyShotsCovered(await entriesFor(v.id)).filter(k=>!k.done);
+    if(miss.length){
+      const ok=confirm(`⚠️ ${miss.length} key shot${miss.length>1?'s have':' has'} no photo/video:\n\n• ${miss.map(m=>m.cat).join('\n• ')}\n\nExport anyway?`);
+      if(!ok) return;
+    }
     const btn=$('#finish'); btn.disabled=true; btn.textContent='Building zip…';
     try{
       const r=await exportVisit(v.id);
@@ -879,7 +884,20 @@ function openTextSize(){
 applyScale(getScale());
 const _aa=$('#aaBtn'); if(_aa) _aa.onclick=openTextSize;
 if('serviceWorker' in navigator){
-  window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
+  // Auto-reload to the new version when an updated service worker takes over.
+  // Only reload on a genuine UPDATE (a controller already existed), never on first install.
+  const hadController = !!navigator.serviceWorker.controller;
+  let refreshing=false;
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{
+    if(refreshing || !hadController) return; refreshing=true; window.location.reload();
+  });
+  window.addEventListener('load', async ()=>{
+    try{
+      const reg=await navigator.serviceWorker.register('./sw.js');
+      reg.update().catch(()=>{});               // check for a new version on every launch
+      setInterval(()=>reg.update().catch(()=>{}), 60*60*1000); // and hourly if left open
+    }catch(e){}
+  });
 }
 if(navigator.storage && navigator.storage.persist){ navigator.storage.persist().catch(()=>{}); }
 
