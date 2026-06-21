@@ -131,6 +131,15 @@
   .iconbtn{border:0; background:transparent; color:#94a3b8; font-size:18px; padding:6px; border-radius:8px}
   .iconbtn:active{background:#f1f5f9}
 
+  /* Key-shot checklist + category groups */
+  .ks-grid{display:grid; grid-template-columns:1fr 1fr; gap:6px 12px}
+  .ks{display:flex; align-items:center; gap:6px; font-size:12.5px; line-height:1.25}
+  .ks span:first-child{font-weight:800; width:15px; text-align:center; flex:none}
+  .ks.ok{color:var(--teal-d)} .ks.miss{color:var(--warn-ink); font-weight:600}
+  .catgrp-label{font-size:11px; font-weight:700; color:var(--muted); text-transform:uppercase;
+    letter-spacing:.04em; margin:14px 2px 6px}
+  .catflag{font-size:13px; flex:none}
+
   /* Empty states */
   .empty{text-align:center; padding:48px 20px; color:var(--muted)}
   .empty .em{font-size:40px; display:block; margin-bottom:10px}
@@ -208,21 +217,30 @@ const esc = s => String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'
 function toast(msg){ const t=document.createElement('div'); t.className='toast'; t.textContent=msg;
   document.body.appendChild(t); setTimeout(()=>t.remove(),2200); }
 
-/* ---------- guided categories (from the brief) ---------- */
-const CATEGORIES = [
-  'Site entrance / context',
+/* ---------- guided categories ---------- */
+/* KEY shots — should always have a photo/video; missing ones are flagged as a reminder */
+const KEY_CATEGORIES = [
   'Feed or source tank',
-  'Product / treated-water tank',
-  'Reject / discharge',
-  'Existing treatment equipment (UF / RO / WWTP / clarifier)',
-  'Equipment nameplate / specs',
-  'Power supply / electrical panel',
-  'Access route / clearance constraint',
-  'Water quality / lab report',
+  'Product tank',
+  'Reject or discharge point',
+  'Access route for equipment',
   'Proposed installation location',
-  'Other (free text)'
+  'Power supply location'
 ];
-const OTHER = 'Other (free text)';
+const OTHER_CATEGORIES = [
+  'Existing treatment equipment',
+  'Power supply',
+  'Water quality report',
+  'Other'
+];
+const CATEGORIES = [...KEY_CATEGORIES, ...OTHER_CATEGORIES];
+const OTHER = 'Other';
+
+/* Which key shots have at least one photo/video? Returns [{cat, done}] for the reminder. */
+function keyShotsCovered(entries){
+  const have = new Set(entries.filter(e=>e.mediaType).map(e=>e.category));
+  return KEY_CATEGORIES.map(c=>({cat:c, done:have.has(c)}));
+}
 
 /* ---------- staff (dropdown options — add names here as the team grows) ---------- */
 const STAFF = ['Adrian'];
@@ -630,7 +648,13 @@ async function renderCapture(){
       </div></div>`;
     }
   }
+  const ks=keyShotsCovered(entries); const missing=ks.filter(k=>!k.done);
+  const checklist=`<div class="card">
+    <div class="section-title" style="margin:0 0 8px">Key shots · ${missing.length?`<span style="color:var(--warn-ink)">${missing.length} missing</span>`:'<span style="color:var(--teal-d)">all captured ✓</span>'}</div>
+    <div class="ks-grid">${ks.map(k=>`<div class="ks ${k.done?'ok':'miss'}"><span>${k.done?'✓':'○'}</span><span>${esc(k.cat)}</span></div>`).join('')}</div>
+  </div>`;
   app.innerHTML=`<div class="wrap screen">
+    ${checklist}
     <div class="section-title">Capture log · ${entries.length} ${entries.length===1?'entry':'entries'}</div>
     ${rows}
   </div>
@@ -683,18 +707,22 @@ function openSheet(media, editEntry){
     previewHtml=`<div class="banner" style="margin-bottom:12px"><span class="b-ic">${editEntry.mediaType==='video'?'🎬':'🖼'}</span><div>Media kept: <code>${esc(editEntry.filename||'')}</code></div></div>`;
   }
 
-  const cats = CATEGORIES.map(c=>{
+  const catGroup = (list, key) => list.map(c=>{
     const sel=(c===OTHER && isOther) || c===selCat;
-    return `<button class="cat-btn ${sel?'sel':''}" data-cat="${esc(c)}"><span class="dot"></span><span>${esc(c)}</span></button>`;
+    return `<button class="cat-btn ${sel?'sel':''}" data-cat="${esc(c)}"><span class="dot"></span><span class="grow">${esc(c)}</span>${key?'<span class="catflag">📷</span>':''}</button>`;
   }).join('');
+  const cats = `<div class="catgrp-label">📷 Key shots — needs a photo/video</div>
+    <div class="cat-list">${catGroup(KEY_CATEGORIES, true)}</div>
+    <div class="catgrp-label">Other</div>
+    <div class="cat-list">${catGroup(OTHER_CATEGORIES, false)}</div>`;
 
   const ov=document.createElement('div'); ov.className='overlay';
   ov.innerHTML=`<div class="sheet" role="dialog" aria-modal="true">
     <div class="grabber"></div>
     <h2>${isEdit?'Edit entry':(media?'Tag this '+(media.mediaType==='video'?'video':'photo'):'New note')}</h2>
     ${previewHtml}
-    <label style="display:block;font-size:13px;font-weight:600;color:#334155;margin-bottom:8px">What is this?</label>
-    <div class="cat-list">${cats}</div>
+    <label style="display:block;font-size:13px;font-weight:600;color:#334155;margin-bottom:4px">What is this?</label>
+    ${cats}
     <div class="field" id="otherWrap" style="${isOther?'':'display:none'};margin-top:10px">
       <label>Describe (Other)</label><input id="s_other" type="text" placeholder="Free text label" value="${esc(otherVal)}">
     </div>
@@ -751,10 +779,13 @@ async function renderSummary(){
   setBar(v.company||'Visit','Summary & export', true);
   const folder=folderName(v);
   const sz=await visitSize(v.id); const big=sz.bytes>=SIZE_WARN;
+  const missingK=keyShotsCovered(await entriesFor(v.id)).filter(k=>!k.done);
   app.innerHTML=`<div class="wrap screen">
     <div class="banner" style="margin-bottom:14px"><span class="b-ic">⏱</span>
       <div><b>Export before you leave site.</b> Send the zip via WhatsApp/AirDrop now —
       un-exported visits may be evicted by iOS under low storage.</div></div>
+    ${missingK.length?`<div class="banner" style="margin-bottom:14px;background:var(--danger-bg);border-color:#fecaca;color:#991b1b"><span class="b-ic">📷</span>
+      <div><b>${missingK.length} key shot${missingK.length>1?'s':''} still have no photo/video:</b> ${missingK.map(m=>esc(m.cat)).join(', ')}. Capture ${missingK.length>1?'them':'it'} before exporting if you can.</div></div>`:''}
 
     <div class="section-title">Key Findings</div>
     <div class="bullets" id="kf"></div>
