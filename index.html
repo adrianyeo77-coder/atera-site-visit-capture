@@ -245,6 +245,32 @@ function keyShotsCovered(entries){
 /* ---------- staff (dropdown options — add names here as the team grows) ---------- */
 const STAFF = ['Adrian'];
 
+/* ---------- site survey (checklist items 6–19, engineer fills in) ---------- */
+const SURVEY = [
+  { group:'Project & stakeholder', items:[
+    {k:'stakeholders', label:'Decision maker vs site contact vs end user — names, roles, contacts', ml:true},
+    {k:'deadline',     label:'Target commissioning date & hard deadlines (regulatory, expansion, audit)'},
+    {k:'budget',       label:'Budget indication / CAPEX'},
+    {k:'trigger',      label:'What triggered this project (quality, capacity, compliance, cost)', ml:true}
+  ]},
+  { group:'Water source', items:[
+    {k:'source_type',  label:'Source type — borewell / municipal / surface / sea / recycled'},
+    {k:'source_count', label:'Number of sources, switching arrangement'},
+    {k:'samples',      label:'Water samples taken (each source: raw, post existing treatment)'},
+    {k:'quick_test',   label:'On-site quick test — TDS, Turbidity'},
+    {k:'flow',         label:'Daily flow available vs required (peak + average)'},
+    {k:'reliability',  label:'Source reliability — outages, seasonal variation (last 12 months)', ml:true},
+    {k:'lab_reports',  label:'Existing analysis / latest lab report obtained'}
+  ]},
+  { group:'Demand & duty', items:[
+    {k:'capacity',       label:'Required product water capacity (m³/hr, m³/day) — peak vs average'},
+    {k:'hours',          label:'Operating hours/day, days/week, shift pattern'},
+    {k:'quality_target', label:'Product quality target — parameter list & limits (in writing)', ml:true}
+  ]}
+];
+const SURVEY_FIELDS = SURVEY.flatMap(g=>g.items);
+function surveyFilled(visit){ const s=visit.survey||{}; return SURVEY_FIELDS.filter(f=>(s[f.k]||'').trim()).length; }
+
 /* ---------- slug + filename helpers ---------- */
 function slugify(s){
   return String(s||'').toLowerCase().trim()
@@ -370,6 +396,16 @@ function buildMarkdown(visit, entries){
   if(visit.location) L.push(`**Location:** ${visit.location}`);
   if(visit.geo) L.push(`**Map:** https://maps.apple.com/?q=${visit.geo.lat},${visit.geo.lng}`);
   if(visit.engineer) L.push(`**Staff:** ${visit.engineer}`);
+  // Site survey (checklist items 6–19) — only the filled-in fields
+  const sv=visit.survey||{};
+  const svGroups=SURVEY.map(g=>({g:g.group, items:g.items.filter(it=>(sv[it.k]||'').trim())})).filter(x=>x.items.length);
+  if(svGroups.length){
+    L.push(''); L.push('---'); L.push(''); L.push('## Site Survey');
+    for(const grp of svGroups){
+      L.push(''); L.push(`### ${grp.g}`);
+      for(const it of grp.items) L.push(`- **${it.label}:** ${sv[it.k].trim().replace(/\r?\n+/g,' ')}`);
+    }
+  }
   L.push(''); L.push('---'); L.push(''); L.push('## Notes'); L.push('');
   for(const e of entries){
     L.push(`### ${e.time} — ${e.category}`);
@@ -488,6 +524,7 @@ async function render(){
   if(state.screen==='home') return renderHome();
   if(state.screen==='cover') return renderCover();
   if(state.screen==='capture') return renderCapture();
+  if(state.screen==='survey') return renderSurvey();
   if(state.screen==='summary') return renderSummary();
   renderHome();
 }
@@ -653,8 +690,17 @@ async function renderCapture(){
     <div class="section-title" style="margin:0 0 8px">Key shots · ${missing.length?`<span style="color:var(--warn-ink)">${missing.length} missing</span>`:'<span style="color:var(--teal-d)">all captured ✓</span>'}</div>
     <div class="ks-grid">${ks.map(k=>`<div class="ks ${k.done?'ok':'miss'}"><span>${k.done?'✓':'○'}</span><span>${esc(k.cat)}</span></div>`).join('')}</div>
   </div>`;
+  const svFilled=surveyFilled(v), svTotal=SURVEY_FIELDS.length, svDone=svFilled===svTotal;
+  const surveyCard=`<button class="card tap" id="openSurvey" style="width:100%;display:block;text-align:left;font:inherit;color:inherit">
+    <div class="row" style="justify-content:space-between">
+      <span style="font-weight:650">📋 Site survey</span>
+      <span class="small" style="${svDone?'color:var(--teal-d);font-weight:700':'color:var(--warn-ink);font-weight:600'}">${svFilled}/${svTotal} filled${svDone?' ✓':''}</span>
+    </div>
+    <div class="tiny muted" style="margin-top:2px">Project context · water source · demand &amp; duty →</div>
+  </button>`;
   app.innerHTML=`<div class="wrap screen">
     ${checklist}
+    ${surveyCard}
     <div class="section-title">Capture log · ${entries.length} ${entries.length===1?'entry':'entries'}</div>
     ${rows}
   </div>
@@ -671,6 +717,7 @@ async function renderCapture(){
   $('#addPhoto').onclick=()=>$('#photoInput').click();
   $('#addVideo').onclick=()=>$('#videoInput').click();
   $('#addNote').onclick=()=>openSheet(null,null);
+  $('#openSurvey').onclick=()=>go('survey', v.id);
   $('#toSummary').onclick=()=>go('summary', v.id);
   $$('[data-edit]').forEach(el=>el.onclick=async()=>{ const e=await dbGet('entries',el.dataset.edit); if(e) openSheet(null,e); });
   $$('[data-delentry]').forEach(b=>b.onclick=async()=>{ if(confirm('Delete this entry?')){ await deleteEntry(b.dataset.delentry); renderCapture(); }});
@@ -685,6 +732,36 @@ function handleFile(input, mediaType){
 }
 $('#photoInput').addEventListener('change', e=>handleFile(e.target,'photo'));
 $('#videoInput').addEventListener('change', e=>handleFile(e.target,'video'));
+
+/* ---------- Site survey (checklist items 6–19) ---------- */
+async function renderSurvey(){
+  const v=await dbGet('visits', state.visitId);
+  if(!v) return go('home');
+  setBar(v.company||'Visit','Site survey', true);
+  const s=v.survey||{};
+  let html=`<div class="wrap screen">
+    <div class="banner" style="margin-bottom:14px"><span class="b-ic">📋</span>
+      <div>Fill in what you learn on site. Everything here is written into the exported report. Leave blank what doesn't apply.</div></div>`;
+  for(const g of SURVEY){
+    html+=`<div class="section-title">${esc(g.group)}</div><div class="card">`;
+    for(const it of g.items){
+      const val=esc(s[it.k]||'');
+      html+=`<div class="field"><label>${esc(it.label)}</label>${
+        it.ml ? `<textarea data-k="${it.k}" rows="2">${val}</textarea>`
+              : `<input type="text" data-k="${it.k}" value="${val}" autocomplete="off">`}</div>`;
+    }
+    html+=`</div>`;
+  }
+  html+=`</div>
+  <div class="actionbar"><div class="inner">
+    <button class="btn primary big block" id="svSave">Save &amp; back</button>
+  </div></div>`;
+  app.innerHTML=html;
+  const persist=async()=>{ const obj={}; $$('[data-k]').forEach(el=>{ const t=el.value.trim(); if(t) obj[el.dataset.k]=t; });
+    v.survey=obj; v.updatedAt=Date.now(); await dbPut('visits',v); };
+  $('#svSave').onclick=async()=>{ await persist(); toast('Survey saved ✓'); go('capture', v.id); };
+  $('#backBtn').onclick=async()=>{ await persist(); go('capture', v.id); };
+}
 
 /* ---------- Tag sheet (modal) ---------- */
 function openSheet(media, editEntry){
