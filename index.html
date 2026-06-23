@@ -140,6 +140,13 @@
     letter-spacing:.04em; margin:14px 2px 6px}
   .catflag{font-size:13px; flex:none}
 
+  /* Collapsible survey sections */
+  .svhead{display:flex; align-items:center; gap:10px; width:100%; background:none; border:0;
+    padding:15px 14px; font:inherit; color:inherit; text-align:left; cursor:pointer; min-height:54px}
+  .svhead:active{background:#f8fafc}
+  .svchev{flex:none; color:var(--muted); font-size:13px; width:14px; text-align:center}
+  .svbody{padding:2px 14px 6px}
+
   /* Empty states */
   .empty{text-align:center; padding:48px 20px; color:var(--muted)}
   .empty .em{font-size:40px; display:block; margin-bottom:10px}
@@ -262,7 +269,22 @@ const SURVEY = [
   { group:'Demand & duty', items:[
     {k:'total_flow',     label:'Total flow required'},
     {k:'hours',          label:'How many hours would they like the system to operate'},
-    {k:'quality_target', label:'Product quality target — parameter list & limits (in writing)', ml:true}
+    {k:'quality_target', label:'Product quality target — parameter list & limits (in writing)', ml:true},
+    {k:'end_use',        label:'End use (drinking, boiler, process, cooling, domestic)'},
+    {k:'storage',        label:'Downstream storage capacity — tank sizes & locations'},
+    {k:'discharge',      label:'Discharge / sludge handling + limits (drain / evaporation pond / ZLD)', ml:true}
+  ]},
+  { group:'Site & layout', items:[
+    {k:'footprint',    label:'Available footprint — L × W × H (m)'},
+    {k:'lifting',      label:'Access & lifting — road size, crane / forklift / manual'},
+    {k:'distances',    label:'Distances — feed→plant, plant→product tank, plant→discharge', ml:true},
+    {k:'pipe_routing', label:'Pipe routing constraints (overhead / trench / existing services)', ml:true}
+  ]},
+  { group:'Utilities', items:[
+    {k:'power_specs',    label:'Power — voltage, phase, Hz; MCC/MDB location & distance to plant'},
+    {k:'compressed_air', label:'Compressed air — availability, pressure, dryness'},
+    {k:'drain',          label:'Drain — location, capacity, discharge permit'},
+    {k:'pid_cost',       label:'P&ID available? + running cost of current system', ml:true}
   ]}
 ];
 const SURVEY_FIELDS = SURVEY.flatMap(g=>g.items);
@@ -738,22 +760,35 @@ async function renderSurvey(){
   const s=v.survey||{};
   let html=`<div class="wrap screen">
     <div class="banner" style="margin-bottom:14px"><span class="b-ic">📋</span>
-      <div>Fill in what you learn on site. Everything here is written into the exported report. Leave blank what doesn't apply.</div></div>`;
-  for(const g of SURVEY){
-    html+=`<div class="section-title">${esc(g.group)}</div><div class="card">`;
+      <div>Fill in what you learn on site. Everything here is written into the exported report. Tap a section to open it; leave blank what doesn't apply.</div></div>`;
+  SURVEY.forEach((g,gi)=>{
+    const filled=g.items.filter(it=>(s[it.k]||'').trim()).length;
+    let body='';
     for(const it of g.items){
       const val=esc(s[it.k]||'');
-      html+=`<div class="field"><label>${esc(it.label)}</label>${
+      body+=`<div class="field"><label>${esc(it.label)}</label>${
         it.ml ? `<textarea data-k="${it.k}" rows="2">${val}</textarea>`
               : `<input type="text" data-k="${it.k}" value="${val}" autocomplete="off">`}</div>`;
     }
-    html+=`</div>`;
-  }
+    html+=`<div class="card svsec" style="padding:0;overflow:hidden">
+      <button class="svhead" data-toggle="${gi}" type="button">
+        <span class="grow" style="font-weight:650">${esc(g.group)}</span>
+        <span class="svcount small" style="${filled?'color:var(--teal-d);font-weight:700':'color:var(--muted)'}">${filled}/${g.items.length}</span>
+        <span class="svchev">▸</span>
+      </button>
+      <div class="svbody" id="svbody-${gi}" hidden>${body}</div>
+    </div>`;
+  });
   html+=`</div>
   <div class="actionbar"><div class="inner">
     <button class="btn primary big block" id="svSave">Save &amp; back</button>
   </div></div>`;
   app.innerHTML=html;
+  $$('.svhead').forEach(h=>h.onclick=()=>{
+    const gi=h.dataset.toggle, body=$('#svbody-'+gi), chev=h.querySelector('.svchev');
+    if(body.hasAttribute('hidden')){ body.removeAttribute('hidden'); chev.textContent='▾'; }
+    else { body.setAttribute('hidden',''); chev.textContent='▸'; }
+  });
   const persist=async()=>{ const obj={}; $$('[data-k]').forEach(el=>{ const t=el.value.trim(); if(t) obj[el.dataset.k]=t; });
     v.survey=obj; v.updatedAt=Date.now(); await dbPut('visits',v); };
   $('#svSave').onclick=async()=>{ await persist(); toast('Survey saved ✓'); go('capture', v.id); };
