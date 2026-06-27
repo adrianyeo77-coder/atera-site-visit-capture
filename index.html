@@ -568,7 +568,7 @@ async function renderHome(){
     html+=`<div class="card" style="margin-bottom:14px">
       <div class="row" style="gap:10px"><span style="font-size:18px">☁️</span>
         <div class="grow"><div style="font-weight:650;font-size:14px">Cloud sync on</div>
-          <div class="tiny muted">${pend?`${pend} visit${pend>1?'s':''} pending upload`:'All visits synced ✓'} · signed in</div></div>
+          <div class="tiny muted">${pend?`${pend} visit${pend>1?'s':''} pending upload`:'All visits synced ✓'} · ${esc(roleLabel())}</div></div>
         <button class="iconbtn" id="signOut" title="Sign out" style="flex:0 0 auto">⎋</button>
       </div>
       <div class="btn-row" style="margin-top:10px">
@@ -1024,10 +1024,18 @@ const CLOUD = {
   url: 'https://cinxpggjqrunbbuoaosg.supabase.co',
   key: 'sb_publishable_ELWQs_nqkUFfHapBRvd3Ww_YsGlbZbK',  // apikey (publishable, public). Data is gated by the team LOGIN + RLS.
   bucket: 'site-visit-media',
-  email: 'field@aterawater.com',                          // shared team account; password is typed by the engineer, never in code
-  version: 'v12'
+  // Shared team logins, mirroring the to-do app. Engineers pick a role and type its password;
+  // passwords live in Supabase Auth (typed at runtime), never in code.
+  accounts: {
+    management: { email: 'awmanagement@aterawater.com', label: 'AW Management' },
+    staff:      { email: 'awstaff@aterawater.com',      label: 'AW Staff' }
+  },
+  version: 'v13'
 };
-const SESS_KEY='atera-cloud-session', DEV_KEY='atera-device-id';
+const SESS_KEY='atera-cloud-session', DEV_KEY='atera-device-id', ROLE_KEY='atera-cloud-role';
+function getRole(){ const r=localStorage.getItem(ROLE_KEY); return r&&CLOUD.accounts[r]?r:null; }
+function setRole(r){ if(r&&CLOUD.accounts[r]) localStorage.setItem(ROLE_KEY,r); }
+function roleLabel(){ const r=getRole(); return r?CLOUD.accounts[r].label:'the team'; }
 function deviceId(){ let d=localStorage.getItem(DEV_KEY); if(!d){ d=uuid(); localStorage.setItem(DEV_KEY,d); } return d; }
 function getSession(){ try{ return JSON.parse(localStorage.getItem(SESS_KEY)||'null'); }catch(e){ return null; } }
 function setSession(s){ localStorage.setItem(SESS_KEY, JSON.stringify(s)); }
@@ -1035,12 +1043,13 @@ function clearSession(){ localStorage.removeItem(SESS_KEY); }
 function cloudEnabled(){ return !!getSession(); }
 function _stash(j){ setSession({ access_token:j.access_token, refresh_token:j.refresh_token,
   expires_at: j.expires_at ? j.expires_at*1000 : Date.now()+((j.expires_in||3600)*1000) }); }
-async function cloudLogin(password, email){
+async function cloudLogin(password, role){
+  const key=CLOUD.accounts[role]?role:'management';
   const r=await fetch(`${CLOUD.url}/auth/v1/token?grant_type=password`,{ method:'POST',
-    headers:{ apikey:CLOUD.key, 'Content-Type':'application/json' }, body:JSON.stringify({ email:email||CLOUD.email, password }) });
+    headers:{ apikey:CLOUD.key, 'Content-Type':'application/json' }, body:JSON.stringify({ email:CLOUD.accounts[key].email, password }) });
   const j=await r.json().catch(()=>({}));
   if(!r.ok || !j.access_token) throw new Error(j.error_description||j.msg||('Sign-in failed ('+r.status+')'));
-  _stash(j); return true;
+  _stash(j); setRole(key); return true;
 }
 async function cloudRefresh(){
   const s=getSession(); if(!s||!s.refresh_token) return null;
@@ -1056,7 +1065,7 @@ async function cloudToken(){
   return await cloudRefresh();
 }
 async function _ah(){ const t=await cloudToken(); if(!t) throw new Error('Not signed in'); return { apikey:CLOUD.key, Authorization:`Bearer ${t}` }; }
-function cloudSignOut(){ clearSession(); toast('Signed out'); go('home'); }
+function cloudSignOut(){ clearSession(); localStorage.removeItem(ROLE_KEY); toast('Signed out'); go('home'); }
 
 async function cloudUpload(path, blob){
   const r=await fetch(`${CLOUD.url}/storage/v1/object/${CLOUD.bucket}/${encodeURI(path)}`,{
@@ -1118,22 +1127,29 @@ async function cloudMediaUrl(path){
 
 /* ---- sign-in sheet ---- */
 function openCloudSetup(){
+  let role=getRole()||'management';
   const ov=document.createElement('div'); ov.className='overlay';
+  const opts=Object.entries(CLOUD.accounts).map(([k,a])=>
+    `<button class="btn role-opt ${k===role?'primary':'subtle'}" data-role="${k}">${esc(a.label)}</button>`).join('');
   ov.innerHTML=`<div class="sheet"><div class="grabber"></div>
     <h2>Team sign-in</h2>
-    <p class="small muted" style="margin:0 0 12px">Sign in with the shared team account to sync your visits and browse the whole team's visits. Visits always save offline first.</p>
-    <div class="field"><label>Account</label><input type="email" value="${esc(CLOUD.email)}" disabled></div>
-    <div class="field"><label>Team password</label><input id="cpass" type="password" autocomplete="current-password" placeholder="Password"></div>
+    <p class="small muted" style="margin:0 0 12px">Pick your role and enter its password to sync your visits and browse the whole team's visits. Visits always save offline first.</p>
+    <div class="field"><label>Sign in as</label><div class="btn-row" id="roleRow">${opts}</div></div>
+    <div class="field"><label>Password</label><input id="cpass" type="password" autocomplete="current-password" placeholder="Password"></div>
     <div class="btn-row"><button class="btn subtle" id="cCancel">Cancel</button>
       <button class="btn primary" id="cSave" style="flex:2">Sign in</button></div></div>`;
   document.body.appendChild(ov);
   const close=()=>ov.remove();
   ov.addEventListener('click',e=>{ if(e.target===ov) close(); });
+  $$('.role-opt',ov).forEach(b=>b.onclick=()=>{ role=b.dataset.role;
+    $$('.role-opt',ov).forEach(x=>{ const sel=x.dataset.role===role; x.classList.toggle('primary',sel); x.classList.toggle('subtle',!sel); });
+    $('#cpass',ov).focus();
+  });
   $('#cCancel',ov).onclick=close;
   $('#cSave',ov).onclick=async()=>{ const p=$('#cpass',ov).value; const btn=$('#cSave',ov);
     if(!p){ toast('Enter the password'); return; }
     btn.disabled=true; btn.textContent='Signing in…';
-    try{ await cloudLogin(p); close(); toast('Signed in ✓'); await syncAll(); render(); }
+    try{ await cloudLogin(p, role); close(); toast(`Signed in as ${CLOUD.accounts[role].label} ✓`); await syncAll(); render(); }
     catch(e){ btn.disabled=false; btn.textContent='Sign in'; toast(e.message||'Sign-in failed'); }
   };
 }
