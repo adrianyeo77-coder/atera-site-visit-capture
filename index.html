@@ -561,6 +561,22 @@ async function renderHome(){
       <div>You have <b>${unsent}</b> visit${unsent>1?'s':''} not yet exported.
       Export &amp; send before leaving site — on-device storage isn't guaranteed long-term.</div></div>`;
   }
+  if(cloudEnabled()){
+    const pend=visits.filter(v=>!v.cloudSynced).length;
+    html+=`<div class="card" style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+      <span style="font-size:18px">☁️</span>
+      <div class="grow"><div style="font-weight:650;font-size:14px">Cloud sync on</div>
+        <div class="tiny muted">${pend?`${pend} visit${pend>1?'s':''} pending upload`:'All visits synced ✓'}</div></div>
+      ${pend?`<button class="btn subtle" id="syncNow" style="flex:0 0 auto;min-height:42px">Sync now</button>`:''}
+    </div>`;
+  } else {
+    html+=`<button class="card tap" id="cloudSetup" style="display:flex;align-items:center;gap:10px;width:100%;text-align:left;font:inherit;color:inherit;margin-bottom:14px">
+      <span style="font-size:18px">☁️</span>
+      <div class="grow"><div style="font-weight:650;font-size:14px">Set up cloud sync</div>
+        <div class="tiny muted">Share visits to the team database</div></div>
+      <span class="svchev">▸</span>
+    </button>`;
+  }
   if(!visits.length){
     html+=`<div class="empty"><span class="em">📋</span>
       <div style="font-weight:600;color:#334155">No visits yet</div>
@@ -573,7 +589,7 @@ async function renderHome(){
           <div class="grow stack">
             <div class="row" style="gap:8px">
               <span class="grow ellip" style="font-weight:650;font-size:16px">${esc(v.company||'Untitled')}</span>
-              <span class="chip ${done?'done':'prog'}">${done?'done':'in progress'}</span>
+              <span class="chip ${done?'done':'prog'}">${done?'done':'in progress'}</span>${v.cloudSynced?'<span class="chip" style="background:var(--teal-tint);color:var(--teal-d)">☁︎ synced</span>':''}
             </div>
             <div class="small muted ellip">${esc(v.date)}${v.location?' · '+esc(v.location):''}</div>
             <div class="tiny muted">${counts[v.id]} ${counts[v.id]===1?'entry':'entries'}${v.exported?' · exported':''}</div>
@@ -605,6 +621,11 @@ async function renderHome(){
   $$('[data-del]').forEach(b=>b.onclick=async e=>{ e.stopPropagation();
     if(confirm('Delete this visit and all its photos? This cannot be undone.')){ await deleteVisit(b.dataset.del); render(); }
   });
+  if($('#cloudSetup')) $('#cloudSetup').onclick=openCloudSetup;
+  if($('#syncNow')) $('#syncNow').onclick=async()=>{ const b=$('#syncNow'); b.disabled=true; b.textContent='Syncing…';
+    const r=await syncAll(); toast(r.skipped?'Sync unavailable (offline?)':`Synced ${r.done}/${r.total}`+(r.fail?` · ${r.fail} failed`:' ✓')); render(); };
+  // background auto-sync when there are pending visits
+  if(cloudEnabled() && navigator.onLine && visits.some(v=>!v.cloudSynced)){ syncAll().then(r=>{ if(r&&r.done>0) render(); }); }
 }
 async function openVisit(id){ const v=await dbGet('visits',id); if(!v) return; go('capture', id); }
 
@@ -989,6 +1010,82 @@ function openTextSize(){
   ov.addEventListener('click',e=>{ if(e.target===ov) close(); });
 }
 
+/* ---------- cloud sync (shared Supabase; insert-only, offline-first buffer) ---------- */
+const CLOUD = {
+  url: 'https://cinxpggjqrunbbuoaosg.supabase.co',
+  key: 'sb_publishable_ELWQs_nqkUFfHapBRvd3Ww_YsGlbZbK',  // publishable key — safe in client; insert-only RLS protects the DB
+  bucket: 'site-visit-media',
+  passcode: 'atera-water',                                 // team passcode to enable syncing on a phone
+  version: 'v11'
+};
+const PASS_KEY='atera-cloud-pass', DEV_KEY='atera-device-id';
+function deviceId(){ let d=localStorage.getItem(DEV_KEY); if(!d){ d=uuid(); localStorage.setItem(DEV_KEY,d); } return d; }
+function cloudEnabled(){ return localStorage.getItem(PASS_KEY)===CLOUD.passcode; }
+function enableCloud(pass){ if(pass===CLOUD.passcode){ localStorage.setItem(PASS_KEY,pass); return true; } return false; }
+function disableCloud(){ localStorage.removeItem(PASS_KEY); }
+const _h=()=>({ apikey:CLOUD.key, Authorization:`Bearer ${CLOUD.key}` });
+
+async function cloudUpload(path, blob){
+  const r=await fetch(`${CLOUD.url}/storage/v1/object/${CLOUD.bucket}/${encodeURI(path)}`,{
+    method:'POST', headers:{ ..._h(), 'Content-Type':blob.type||'application/octet-stream' }, body:blob });
+  if(!r.ok && r.status!==409) throw new Error('upload '+r.status+' '+(await r.text()).slice(0,120));
+}
+async function cloudInsertRow(table, row){
+  const r=await fetch(`${CLOUD.url}/rest/v1/${table}`,{
+    method:'POST', headers:{ ..._h(), 'Content-Type':'application/json', Prefer:'return=minimal' },
+    body:JSON.stringify(row) });
+  if(!r.ok && r.status!==409) throw new Error(table+' '+r.status+' '+(await r.text()).slice(0,160));
+}
+async function syncVisit(visitId){
+  const v=await dbGet('visits',visitId); if(!v || v.cloudSynced) return;
+  const entries=await entriesFor(v.id), folder=folderName(v);
+  for(const e of entries){                               // 1) media files
+    if(!e.filename) continue;
+    const rec=await dbGet('blobs',e.id);
+    if(rec&&rec.blob) await cloudUpload(`${folder}/${e.filename}`, rec.blob);
+  }
+  await cloudInsertRow('site_visits', {                  // 2) visit row
+    id:v.id, date:v.date, company:v.company, engineer:v.engineer, location:v.location||null,
+    gps:v.geo||null, survey:v.survey||{}, key_findings:v.keyFindings||[], outstanding:v.outstanding||[],
+    folder, device_id:deviceId(), app_version:CLOUD.version, created_at:new Date(v.createdAt||Date.now()).toISOString() });
+  for(const e of entries){                               // 3) entry rows (one-by-one: tolerant to retries)
+    await cloudInsertRow('site_visit_entries', {
+      id:e.id, visit_id:v.id, seq:e.seq||null, time:e.time, category:e.category, note:e.note||null,
+      media_type:e.mediaType||null, filename:e.filename||null,
+      storage_path:e.filename?`${folder}/${e.filename}`:null, geo:e.geo||null,
+      created_at:new Date(e.seq||Date.now()).toISOString() });
+  }
+  v.cloudSynced=true; v.cloudSyncedAt=Date.now(); await dbPut('visits',v);
+}
+let _syncing=false;
+async function syncAll(){
+  if(!cloudEnabled() || !navigator.onLine || _syncing) return {skipped:true};
+  _syncing=true; let done=0, fail=0;
+  try{
+    const pending=(await dbGetAll('visits')).filter(v=>!v.cloudSynced);
+    for(const v of pending){
+      try{ await syncVisit(v.id); done++; } catch(e){ fail++; console.warn('sync failed', v.id, e.message); }
+    }
+    return {done, fail, total:pending.length};
+  } finally { _syncing=false; }
+}
+function openCloudSetup(){
+  const ov=document.createElement('div'); ov.className='overlay';
+  ov.innerHTML=`<div class="sheet"><div class="grabber"></div>
+    <h2>Cloud sync</h2>
+    <p class="small muted" style="margin:0 0 12px">Enter the team passcode to sync this phone's visits to the shared Atera database. Visits always save offline first — sync happens in the background when you have signal.</p>
+    <div class="field"><label>Team passcode</label><input id="cpass" type="password" autocomplete="off" placeholder="Passcode"></div>
+    <div class="btn-row"><button class="btn subtle" id="cCancel">Cancel</button>
+      <button class="btn primary" id="cSave" style="flex:2">Enable sync</button></div></div>`;
+  document.body.appendChild(ov);
+  const close=()=>ov.remove();
+  ov.addEventListener('click',e=>{ if(e.target===ov) close(); });
+  $('#cCancel',ov).onclick=close;
+  $('#cSave',ov).onclick=async()=>{ const p=$('#cpass',ov).value.trim();
+    if(enableCloud(p)){ close(); toast('Cloud sync enabled ✓'); await syncAll(); render(); }
+    else toast('Wrong passcode'); };
+}
+
 /* ---------- boot ---------- */
 applyScale(getScale());
 const _aa=$('#aaBtn'); if(_aa) _aa.onclick=openTextSize;
@@ -1016,7 +1113,7 @@ render();
 window.SVC={ slugify, catSlug, entryFilename, folderName, buildMarkdown, crc32, makeZip,
   blobBytes, createVisit, saveEntry, entriesFor, buildVisitZip, exportVisit, deleteVisit,
   dbGet, dbGetAll, dbPut, CATEGORIES, go, getScale, applyScale, saveScale, openTextSize,
-  visitSize, fmtSize };
+  visitSize, fmtSize, cloudEnabled, enableCloud, disableCloud, syncAll, syncVisit, CLOUD };
 </script>
 </body>
 </html>
