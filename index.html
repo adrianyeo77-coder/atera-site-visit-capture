@@ -545,6 +545,8 @@ async function render(){
   if(state.screen==='capture') return renderCapture();
   if(state.screen==='survey') return renderSurvey();
   if(state.screen==='summary') return renderSummary();
+  if(state.screen==='team') return renderTeam();
+  if(state.screen==='teamVisit') return renderTeamVisit();
   renderHome();
 }
 
@@ -563,17 +565,22 @@ async function renderHome(){
   }
   if(cloudEnabled()){
     const pend=visits.filter(v=>!v.cloudSynced).length;
-    html+=`<div class="card" style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
-      <span style="font-size:18px">☁️</span>
-      <div class="grow"><div style="font-weight:650;font-size:14px">Cloud sync on</div>
-        <div class="tiny muted">${pend?`${pend} visit${pend>1?'s':''} pending upload`:'All visits synced ✓'}</div></div>
-      ${pend?`<button class="btn subtle" id="syncNow" style="flex:0 0 auto;min-height:42px">Sync now</button>`:''}
+    html+=`<div class="card" style="margin-bottom:14px">
+      <div class="row" style="gap:10px"><span style="font-size:18px">☁️</span>
+        <div class="grow"><div style="font-weight:650;font-size:14px">Cloud sync on</div>
+          <div class="tiny muted">${pend?`${pend} visit${pend>1?'s':''} pending upload`:'All visits synced ✓'} · signed in</div></div>
+        <button class="iconbtn" id="signOut" title="Sign out" style="flex:0 0 auto">⎋</button>
+      </div>
+      <div class="btn-row" style="margin-top:10px">
+        <button class="btn subtle" id="teamView">☁︎ Team visits</button>
+        ${pend?`<button class="btn ghost" id="syncNow">Sync now</button>`:''}
+      </div>
     </div>`;
   } else {
     html+=`<button class="card tap" id="cloudSetup" style="display:flex;align-items:center;gap:10px;width:100%;text-align:left;font:inherit;color:inherit;margin-bottom:14px">
       <span style="font-size:18px">☁️</span>
-      <div class="grow"><div style="font-weight:650;font-size:14px">Set up cloud sync</div>
-        <div class="tiny muted">Share visits to the team database</div></div>
+      <div class="grow"><div style="font-weight:650;font-size:14px">Sign in to sync &amp; view team visits</div>
+        <div class="tiny muted">Shared team database</div></div>
       <span class="svchev">▸</span>
     </button>`;
   }
@@ -622,6 +629,8 @@ async function renderHome(){
     if(confirm('Delete this visit and all its photos? This cannot be undone.')){ await deleteVisit(b.dataset.del); render(); }
   });
   if($('#cloudSetup')) $('#cloudSetup').onclick=openCloudSetup;
+  if($('#teamView')) $('#teamView').onclick=()=>go('team');
+  if($('#signOut')) $('#signOut').onclick=cloudSignOut;
   if($('#syncNow')) $('#syncNow').onclick=async()=>{ const b=$('#syncNow'); b.disabled=true; b.textContent='Syncing…';
     const r=await syncAll(); toast(r.skipped?'Sync unavailable (offline?)':`Synced ${r.done}/${r.total}`+(r.fail?` · ${r.fail} failed`:' ✓')); render(); };
   // background auto-sync when there are pending visits
@@ -1010,45 +1019,68 @@ function openTextSize(){
   ov.addEventListener('click',e=>{ if(e.target===ov) close(); });
 }
 
-/* ---------- cloud sync (shared Supabase; insert-only, offline-first buffer) ---------- */
+/* ---------- cloud sync (shared Supabase via team login; offline-first buffer) ---------- */
 const CLOUD = {
   url: 'https://cinxpggjqrunbbuoaosg.supabase.co',
-  key: 'sb_publishable_ELWQs_nqkUFfHapBRvd3Ww_YsGlbZbK',  // publishable key — safe in client; insert-only RLS protects the DB
+  key: 'sb_publishable_ELWQs_nqkUFfHapBRvd3Ww_YsGlbZbK',  // apikey (publishable, public). Data is gated by the team LOGIN + RLS.
   bucket: 'site-visit-media',
-  passcode: 'atera-water',                                 // team passcode to enable syncing on a phone
-  version: 'v11'
+  email: 'field@aterawater.com',                          // shared team account; password is typed by the engineer, never in code
+  version: 'v12'
 };
-const PASS_KEY='atera-cloud-pass', DEV_KEY='atera-device-id';
+const SESS_KEY='atera-cloud-session', DEV_KEY='atera-device-id';
 function deviceId(){ let d=localStorage.getItem(DEV_KEY); if(!d){ d=uuid(); localStorage.setItem(DEV_KEY,d); } return d; }
-function cloudEnabled(){ return localStorage.getItem(PASS_KEY)===CLOUD.passcode; }
-function enableCloud(pass){ if(pass===CLOUD.passcode){ localStorage.setItem(PASS_KEY,pass); return true; } return false; }
-function disableCloud(){ localStorage.removeItem(PASS_KEY); }
-const _h=()=>({ apikey:CLOUD.key, Authorization:`Bearer ${CLOUD.key}` });
+function getSession(){ try{ return JSON.parse(localStorage.getItem(SESS_KEY)||'null'); }catch(e){ return null; } }
+function setSession(s){ localStorage.setItem(SESS_KEY, JSON.stringify(s)); }
+function clearSession(){ localStorage.removeItem(SESS_KEY); }
+function cloudEnabled(){ return !!getSession(); }
+function _stash(j){ setSession({ access_token:j.access_token, refresh_token:j.refresh_token,
+  expires_at: j.expires_at ? j.expires_at*1000 : Date.now()+((j.expires_in||3600)*1000) }); }
+async function cloudLogin(password, email){
+  const r=await fetch(`${CLOUD.url}/auth/v1/token?grant_type=password`,{ method:'POST',
+    headers:{ apikey:CLOUD.key, 'Content-Type':'application/json' }, body:JSON.stringify({ email:email||CLOUD.email, password }) });
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok || !j.access_token) throw new Error(j.error_description||j.msg||('Sign-in failed ('+r.status+')'));
+  _stash(j); return true;
+}
+async function cloudRefresh(){
+  const s=getSession(); if(!s||!s.refresh_token) return null;
+  const r=await fetch(`${CLOUD.url}/auth/v1/token?grant_type=refresh_token`,{ method:'POST',
+    headers:{ apikey:CLOUD.key, 'Content-Type':'application/json' }, body:JSON.stringify({ refresh_token:s.refresh_token }) });
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok || !j.access_token){ clearSession(); return null; }
+  _stash(j); return j.access_token;
+}
+async function cloudToken(){
+  const s=getSession(); if(!s) return null;
+  if(Date.now() < (s.expires_at - 60000)) return s.access_token;
+  return await cloudRefresh();
+}
+async function _ah(){ const t=await cloudToken(); if(!t) throw new Error('Not signed in'); return { apikey:CLOUD.key, Authorization:`Bearer ${t}` }; }
+function cloudSignOut(){ clearSession(); toast('Signed out'); go('home'); }
 
 async function cloudUpload(path, blob){
   const r=await fetch(`${CLOUD.url}/storage/v1/object/${CLOUD.bucket}/${encodeURI(path)}`,{
-    method:'POST', headers:{ ..._h(), 'Content-Type':blob.type||'application/octet-stream' }, body:blob });
+    method:'POST', headers:{ ...(await _ah()), 'Content-Type':blob.type||'application/octet-stream' }, body:blob });
   if(!r.ok && r.status!==409) throw new Error('upload '+r.status+' '+(await r.text()).slice(0,120));
 }
 async function cloudInsertRow(table, row){
   const r=await fetch(`${CLOUD.url}/rest/v1/${table}`,{
-    method:'POST', headers:{ ..._h(), 'Content-Type':'application/json', Prefer:'return=minimal' },
-    body:JSON.stringify(row) });
+    method:'POST', headers:{ ...(await _ah()), 'Content-Type':'application/json', Prefer:'return=minimal' }, body:JSON.stringify(row) });
   if(!r.ok && r.status!==409) throw new Error(table+' '+r.status+' '+(await r.text()).slice(0,160));
 }
 async function syncVisit(visitId){
   const v=await dbGet('visits',visitId); if(!v || v.cloudSynced) return;
   const entries=await entriesFor(v.id), folder=folderName(v);
-  for(const e of entries){                               // 1) media files
+  for(const e of entries){
     if(!e.filename) continue;
     const rec=await dbGet('blobs',e.id);
     if(rec&&rec.blob) await cloudUpload(`${folder}/${e.filename}`, rec.blob);
   }
-  await cloudInsertRow('site_visits', {                  // 2) visit row
+  await cloudInsertRow('site_visits', {
     id:v.id, date:v.date, company:v.company, engineer:v.engineer, location:v.location||null,
     gps:v.geo||null, survey:v.survey||{}, key_findings:v.keyFindings||[], outstanding:v.outstanding||[],
     folder, device_id:deviceId(), app_version:CLOUD.version, created_at:new Date(v.createdAt||Date.now()).toISOString() });
-  for(const e of entries){                               // 3) entry rows (one-by-one: tolerant to retries)
+  for(const e of entries){
     await cloudInsertRow('site_visit_entries', {
       id:e.id, visit_id:v.id, seq:e.seq||null, time:e.time, category:e.category, note:e.note||null,
       media_type:e.mediaType||null, filename:e.filename||null,
@@ -1069,21 +1101,100 @@ async function syncAll(){
     return {done, fail, total:pending.length};
   } finally { _syncing=false; }
 }
+
+/* ---- read side: browse all team visits ---- */
+async function cloudListVisits(){
+  const r=await fetch(`${CLOUD.url}/rest/v1/site_visits?select=*&order=date.desc,synced_at.desc`,{ headers:await _ah() });
+  if(!r.ok) throw new Error('list '+r.status); return await r.json();
+}
+async function cloudListEntries(visitId){
+  const r=await fetch(`${CLOUD.url}/rest/v1/site_visit_entries?visit_id=eq.${visitId}&order=time.asc`,{ headers:await _ah() });
+  if(!r.ok) throw new Error('entries '+r.status); return await r.json();
+}
+async function cloudMediaUrl(path){
+  try{ const r=await fetch(`${CLOUD.url}/storage/v1/object/${CLOUD.bucket}/${encodeURI(path)}`,{ headers:await _ah() });
+    if(!r.ok) return null; return objUrl(await r.blob()); }catch(e){ return null; }
+}
+
+/* ---- sign-in sheet ---- */
 function openCloudSetup(){
   const ov=document.createElement('div'); ov.className='overlay';
   ov.innerHTML=`<div class="sheet"><div class="grabber"></div>
-    <h2>Cloud sync</h2>
-    <p class="small muted" style="margin:0 0 12px">Enter the team passcode to sync this phone's visits to the shared Atera database. Visits always save offline first — sync happens in the background when you have signal.</p>
-    <div class="field"><label>Team passcode</label><input id="cpass" type="password" autocomplete="off" placeholder="Passcode"></div>
+    <h2>Team sign-in</h2>
+    <p class="small muted" style="margin:0 0 12px">Sign in with the shared team account to sync your visits and browse the whole team's visits. Visits always save offline first.</p>
+    <div class="field"><label>Account</label><input type="email" value="${esc(CLOUD.email)}" disabled></div>
+    <div class="field"><label>Team password</label><input id="cpass" type="password" autocomplete="current-password" placeholder="Password"></div>
     <div class="btn-row"><button class="btn subtle" id="cCancel">Cancel</button>
-      <button class="btn primary" id="cSave" style="flex:2">Enable sync</button></div></div>`;
+      <button class="btn primary" id="cSave" style="flex:2">Sign in</button></div></div>`;
   document.body.appendChild(ov);
   const close=()=>ov.remove();
   ov.addEventListener('click',e=>{ if(e.target===ov) close(); });
   $('#cCancel',ov).onclick=close;
-  $('#cSave',ov).onclick=async()=>{ const p=$('#cpass',ov).value.trim();
-    if(enableCloud(p)){ close(); toast('Cloud sync enabled ✓'); await syncAll(); render(); }
-    else toast('Wrong passcode'); };
+  $('#cSave',ov).onclick=async()=>{ const p=$('#cpass',ov).value; const btn=$('#cSave',ov);
+    if(!p){ toast('Enter the password'); return; }
+    btn.disabled=true; btn.textContent='Signing in…';
+    try{ await cloudLogin(p); close(); toast('Signed in ✓'); await syncAll(); render(); }
+    catch(e){ btn.disabled=false; btn.textContent='Sign in'; toast(e.message||'Sign-in failed'); }
+  };
+}
+
+/* ---- Team visits (read-only browse of the shared cloud) ---- */
+async function renderTeam(){
+  setBar('Team visits','All engineers · shared', true);
+  $('#backBtn').onclick=()=>go('home');
+  if(!cloudEnabled()) return go('home');
+  app.innerHTML=`<div class="wrap screen"><div class="empty"><span class="em">☁️</span><div class="small">Loading team visits…</div></div></div>`;
+  let rows;
+  try{ rows=await cloudListVisits(); }
+  catch(e){ app.innerHTML=`<div class="wrap screen"><div class="banner"><span class="b-ic">⚠️</span><div>Couldn't load (${esc(e.message)}). Check connection / sign-in.</div></div><button class="btn subtle block" id="b2" style="margin-top:12px">← Back</button></div>`; $('#b2').onclick=()=>go('home'); return; }
+  let html=`<div class="wrap screen"><div class="section-title">${rows.length} visit${rows.length===1?'':'s'} · whole team</div>`;
+  if(!rows.length) html+=`<div class="empty"><span class="em">📭</span><div class="small">No visits in the cloud yet.</div></div>`;
+  for(const v of rows){
+    html+=`<button class="card tap" data-team="${esc(v.id)}" style="display:block;width:100%;text-align:left;font:inherit;color:inherit">
+      <div class="ellip" style="font-weight:650;font-size:16px">${esc(v.company||'Untitled')}</div>
+      <div class="small muted ellip">${esc(v.date||'')}${v.engineer?' · '+esc(v.engineer):''}${v.location?' · '+esc(v.location):''}</div>
+    </button>`;
+  }
+  html+=`</div>`;
+  app.innerHTML=html;
+  $$('[data-team]').forEach(b=>b.onclick=()=>{ state.teamVisit=b.dataset.team; go('teamVisit'); });
+}
+async function renderTeamVisit(){
+  const id=state.teamVisit; if(!id) return go('team');
+  setBar('Team visit','shared', true);
+  $('#backBtn').onclick=()=>go('team');
+  app.innerHTML=`<div class="wrap screen"><div class="empty"><span class="em">☁️</span><div class="small">Loading…</div></div></div>`;
+  let v, entries;
+  try{ v=(await cloudListVisits()).find(x=>x.id===id); entries=await cloudListEntries(id); }
+  catch(e){ app.innerHTML=`<div class="wrap screen"><div class="banner"><span class="b-ic">⚠️</span><div>Couldn't load (${esc(e.message)}).</div></div><button class="btn subtle block" id="b3" style="margin-top:12px">← Back</button></div>`; $('#b3').onclick=()=>go('team'); return; }
+  if(!v) return go('team');
+  const sv=v.survey||{};
+  let h=`<div class="wrap screen">
+    <div class="card"><div style="font-weight:700;font-size:18px">${esc(v.company||'Untitled')}</div>
+      <div class="small muted">${esc(v.date||'')}${v.engineer?' · '+esc(v.engineer):''}</div>
+      ${v.location?`<div class="small muted">📍 ${esc(v.location)}</div>`:''}</div>`;
+  const kf=v.key_findings||[], os=v.outstanding||[];
+  if(kf.length||os.length){ h+=`<div class="card">`;
+    if(kf.length){ h+=`<div style="font-weight:650;font-size:13px">Key findings</div>`; kf.forEach(b=>h+=`<div class="small">• ${esc(b)}</div>`); }
+    if(os.length){ h+=`<div style="font-weight:650;font-size:13px;margin-top:8px">Outstanding</div>`; os.forEach(b=>h+=`<div class="small">• ${esc(b)}</div>`); }
+    h+=`</div>`; }
+  const svGroups=SURVEY.map(g=>({g:g.group,items:g.items.filter(it=>(sv[it.k]||'').trim())})).filter(x=>x.items.length);
+  if(svGroups.length){ h+=`<div class="section-title">Site survey</div><div class="card">`;
+    for(const grp of svGroups){ h+=`<div style="font-weight:650;font-size:13px;margin:8px 0 2px">${esc(grp.g)}</div>`;
+      for(const it of grp.items) h+=`<div class="small"><span class="muted">${esc(it.label)}:</span> ${esc(sv[it.k])}</div>`; }
+    h+=`</div>`; }
+  h+=`<div class="section-title">Captures · ${entries.length}</div>`;
+  for(const e of entries){
+    h+=`<div class="card"><div class="entry">
+      <div class="ph" id="tm-${esc(e.id)}">${e.media_type==='video'?'🎬':(e.media_type?'🖼':'📝')}</div>
+      <div class="grow"><div class="time">${esc(e.time||'')}</div><div class="cat">${esc(e.category||'')}</div>
+        ${e.note?`<div class="note">${esc(e.note)}</div>`:''}</div>
+    </div></div>`;
+  }
+  h+=`</div>`;
+  app.innerHTML=h;
+  for(const e of entries){ if(e.media_type && e.storage_path){ cloudMediaUrl(e.storage_path).then(url=>{ const ph=$('#tm-'+e.id); if(!ph||!url) return;
+    ph.outerHTML = e.media_type==='video' ? `<video class="thumb" src="${url}" muted playsinline preload="metadata"></video>` : `<img class="thumb" src="${url}" alt="">`; }); } }
 }
 
 /* ---------- boot ---------- */
@@ -1113,7 +1224,8 @@ render();
 window.SVC={ slugify, catSlug, entryFilename, folderName, buildMarkdown, crc32, makeZip,
   blobBytes, createVisit, saveEntry, entriesFor, buildVisitZip, exportVisit, deleteVisit,
   dbGet, dbGetAll, dbPut, CATEGORIES, go, getScale, applyScale, saveScale, openTextSize,
-  visitSize, fmtSize, cloudEnabled, enableCloud, disableCloud, syncAll, syncVisit, CLOUD };
+  visitSize, fmtSize, cloudEnabled, cloudLogin, cloudSignOut, syncAll, syncVisit,
+  cloudListVisits, cloudListEntries, cloudMediaUrl, CLOUD };
 </script>
 </body>
 </html>

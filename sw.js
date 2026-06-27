@@ -1,7 +1,7 @@
 /* Atera Site Visit Capture — service worker
    Pre-caches the app shell so the app launches with no network.
    The app makes zero other network calls at runtime. */
-const CACHE = 'atera-svc-v11';
+const CACHE = 'atera-svc-v12';
 const SHELL = [
   './',
   './index.html',
