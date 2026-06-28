@@ -1,1 +1,4 @@
 .DS_Store
+
+# internal handoff docs — keep out of the public Pages repo
+SHARED-TEAM-LOGIN.md

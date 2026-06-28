@@ -252,13 +252,17 @@ function keyShotsCovered(entries){
 /* ---------- staff (dropdown options — add names here as the team grows) ---------- */
 const STAFF = ['Adrian'];
 
-/* ---------- site survey (checklist items 6–19, engineer fills in) ---------- */
+/* ---------- site survey — engineer fills in on site (stored as JSONB, no DB migration) ----------
+   Field shapes: {k,label} text · {…,ml:true} textarea · {…,num:true} numeric keypad · {…,sel:[...]} dropdown */
 const SURVEY = [
-  { group:'Project & stakeholder', items:[
-    {k:'stakeholders', label:'Stakeholder name and role', ml:true},
-    {k:'deadline',     label:'Target commissioning date'},
-    {k:'budget',       label:'Does the customer have budget for this already?'},
-    {k:'trigger',      label:'Reason for project', ml:true}
+  { group:'Pre-visit information', items:[
+    {k:'project_name',      label:'Project name'},
+    {k:'project_type',      label:'Type of project', sel:['Equipment Sales','Water as a Service']},
+    {k:'pic_name',          label:'PIC name'},
+    {k:'pic_role',          label:'PIC role'},
+    {k:'deadline',          label:'Target commissioning date'},
+    {k:'budget',            label:'Does the budget exist?'},
+    {k:'problem_statement', label:'Customer problem statement', ml:true}
   ]},
   { group:'Water source', items:[
     {k:'source_type',  label:'Source type — borewell / municipal / surface / sea / recycled'},
@@ -266,25 +270,22 @@ const SURVEY = [
     {k:'turbidity',    label:'On-site test — Turbidity'},
     {k:'reliability',  label:'Water source reliability', ml:true}
   ]},
-  { group:'Demand & duty', items:[
-    {k:'total_flow',     label:'Total flow required'},
-    {k:'hours',          label:'How many hours would they like the system to operate'},
-    {k:'quality_target', label:'Product quality target — parameter list & limits (in writing)', ml:true},
-    {k:'end_use',        label:'End use (drinking, boiler, process, cooling, domestic)'},
-    {k:'storage',        label:'Downstream storage capacity — tank sizes & locations'},
-    {k:'discharge',      label:'Discharge / sludge handling + limits (drain / evaporation pond / ZLD)', ml:true}
+  { group:'Demand and duty', items:[
+    {k:'flow_m3day',          label:'Total flow required (m³/day)', num:true},
+    {k:'flow_m3hr',           label:'Total flow required (m³/hr)', num:true},
+    {k:'operating_days_week', label:'No. of operating days per week', num:true},
+    {k:'hours_weekday',       label:'Hours of operation per day (weekday)', num:true},
+    {k:'hours_sat',           label:'Hours of operation per day (Sat)', num:true},
+    {k:'hours_sun',           label:'Hours of operation per day (Sun)', num:true},
+    {k:'end_use',             label:'End use (drinking, boiler, process, cooling, domestic)'}
   ]},
-  { group:'Site & layout', items:[
-    {k:'footprint',    label:'Available footprint — L × W × H (m)'},
-    {k:'lifting',      label:'Access & lifting — road size, crane / forklift / manual'},
-    {k:'distances',    label:'Distances — feed→plant, plant→product tank, plant→discharge', ml:true},
-    {k:'pipe_routing', label:'Pipe routing constraints (overhead / trench / existing services)', ml:true}
-  ]},
-  { group:'Utilities', items:[
-    {k:'power_specs',    label:'Power — voltage, phase, Hz; MCC/MDB location & distance to plant'},
-    {k:'compressed_air', label:'Compressed air — availability, pressure, dryness'},
-    {k:'drain',          label:'Drain — location, capacity, discharge permit'},
-    {k:'pid_cost',       label:'P&ID available? + running cost of current system', ml:true}
+  { group:'Site layout', items:[
+    {k:'footprint',           label:'Available footprint — L × W × H (m)'},
+    {k:'dist_feed_plant',     label:'Distance — Feed → Plant (m)', num:true},
+    {k:'dist_plant_product',  label:'Distance — Plant → Product (m)', num:true},
+    {k:'dist_plant_discharge',label:'Distance — Plant → Discharge (m)', num:true},
+    {k:'dist_plant_power',    label:'Distance — Plant → Power (m)', num:true},
+    {k:'pipe_routing',        label:'Pipe routing constraints (overhead / trench / existing services)', ml:true}
   ]}
 ];
 const SURVEY_FIELDS = SURVEY.flatMap(g=>g.items);
@@ -796,9 +797,17 @@ async function renderSurvey(){
     let body='';
     for(const it of g.items){
       const val=esc(s[it.k]||'');
-      body+=`<div class="field"><label>${esc(it.label)}</label>${
-        it.ml ? `<textarea data-k="${it.k}" rows="2">${val}</textarea>`
-              : `<input type="text" data-k="${it.k}" value="${val}" autocomplete="off">`}</div>`;
+      let ctl;
+      if(it.sel){
+        ctl=`<select data-k="${it.k}"><option value="">— select —</option>`
+          + it.sel.map(o=>`<option value="${esc(o)}"${s[it.k]===o?' selected':''}>${esc(o)}</option>`).join('')
+          + `</select>`;
+      } else if(it.ml){
+        ctl=`<textarea data-k="${it.k}" rows="2">${val}</textarea>`;
+      } else {
+        ctl=`<input type="text" data-k="${it.k}" value="${val}"${it.num?' inputmode="decimal"':''} autocomplete="off">`;
+      }
+      body+=`<div class="field"><label>${esc(it.label)}</label>${ctl}</div>`;
     }
     html+=`<div class="card svsec" style="padding:0;overflow:hidden">
       <button class="svhead" data-toggle="${gi}" type="button">
@@ -1030,7 +1039,7 @@ const CLOUD = {
     management: { email: 'awmanagement@aterawater.com', label: 'AW Management' },
     staff:      { email: 'awstaff@aterawater.com',      label: 'AW Staff' }
   },
-  version: 'v13'
+  version: 'v14'
 };
 const SESS_KEY='atera-cloud-session', DEV_KEY='atera-device-id', ROLE_KEY='atera-cloud-role';
 function getRole(){ const r=localStorage.getItem(ROLE_KEY); return r&&CLOUD.accounts[r]?r:null; }
