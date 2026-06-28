@@ -180,6 +180,28 @@
   .cat-btn.sel{border-color:var(--teal); background:var(--teal-tint); color:var(--teal-d); font-weight:600}
   .cat-btn.sel .dot{border-color:var(--teal); background:var(--teal)}
 
+  /* Sign-in: role picker + numeric PIN pad (mirrors the Tasks app) */
+  .role-pick{display:flex; flex-direction:column; gap:10px}
+  .role-btn{display:flex; align-items:center; gap:14px; width:100%; text-align:left; font:inherit; color:inherit;
+    padding:14px 16px; border:1px solid #e2e8f0; border-radius:14px; background:#fff; cursor:pointer}
+  .role-btn:active{transform:translateY(1px); background:#f8fafc}
+  .role-emoji{font-size:24px; line-height:1; flex:none}
+  .role-text{display:flex; flex-direction:column; gap:2px; min-width:0}
+  .role-name{font-weight:700; font-size:16px; color:var(--navy)}
+  .role-desc{color:var(--muted); font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .role-go{margin-left:auto; color:var(--teal); font-size:20px; flex:none}
+  .pin-back{background:none; border:0; color:var(--muted); font-weight:600; font-size:13px; padding:4px 2px; cursor:pointer}
+  .pin-input{width:100%; text-align:center; letter-spacing:12px; font-size:26px;
+    padding:14px; border:1px solid #e2e8f0; border-radius:12px; background:#f8fafc; caret-color:transparent; cursor:default}
+  .keypad{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:16px}
+  .key{padding:16px 0; font-size:22px; font-weight:600; border-radius:14px; background:#fff;
+    border:1px solid #e2e8f0; color:var(--navy); cursor:pointer; transition:background .1s, transform .05s}
+  .key:active{transform:scale(.96); background:#f1f5f9}
+  .key-sub{color:var(--muted); font-size:18px}
+  .key-go{background:var(--teal); color:#fff; border-color:var(--teal); font-size:24px}
+  .key[disabled]{opacity:.6}
+  .auth-error{background:var(--danger-bg); color:var(--danger); padding:10px 12px; border-radius:8px; margin-top:12px; font-size:13px}
+
   /* Bullet list editor */
   .bullets .brow{display:flex; gap:8px; margin-bottom:8px}
   .bullets .brow input{flex:1}
@@ -1039,7 +1061,7 @@ const CLOUD = {
     management: { email: 'awmanagement@aterawater.com', label: 'AW Management' },
     staff:      { email: 'awstaff@aterawater.com',      label: 'AW Staff' }
   },
-  version: 'v14'
+  version: 'v15'
 };
 const SESS_KEY='atera-cloud-session', DEV_KEY='atera-device-id', ROLE_KEY='atera-cloud-role';
 function getRole(){ const r=localStorage.getItem(ROLE_KEY); return r&&CLOUD.accounts[r]?r:null; }
@@ -1134,33 +1156,63 @@ async function cloudMediaUrl(path){
     if(!r.ok) return null; return objUrl(await r.blob()); }catch(e){ return null; }
 }
 
-/* ---- sign-in sheet ---- */
+/* ---- sign-in sheet: pick a role, then type its PIN on a numeric keypad ----
+   Mirrors the Tasks app (role buttons → PIN pad). The typed PIN is the account's
+   Supabase password; it goes straight into cloudLogin(pin, role) — unchanged, so the
+   session stays under our own `atera-cloud-session` key (no cross-app collision). */
+const ROLE_EMOJI={ management:'🛠️', staff:'👤' };
 function openCloudSetup(){
-  let role=getRole()||'management';
   const ov=document.createElement('div'); ov.className='overlay';
-  const opts=Object.entries(CLOUD.accounts).map(([k,a])=>
-    `<button class="btn role-opt ${k===role?'primary':'subtle'}" data-role="${k}">${esc(a.label)}</button>`).join('');
-  ov.innerHTML=`<div class="sheet"><div class="grabber"></div>
-    <h2>Team sign-in</h2>
-    <p class="small muted" style="margin:0 0 12px">Pick your role and enter its password to sync your visits and browse the whole team's visits. Visits always save offline first.</p>
-    <div class="field"><label>Sign in as</label><div class="btn-row" id="roleRow">${opts}</div></div>
-    <div class="field"><label>Password</label><input id="cpass" type="password" autocomplete="current-password" placeholder="Password"></div>
-    <div class="btn-row"><button class="btn subtle" id="cCancel">Cancel</button>
-      <button class="btn primary" id="cSave" style="flex:2">Sign in</button></div></div>`;
   document.body.appendChild(ov);
   const close=()=>ov.remove();
   ov.addEventListener('click',e=>{ if(e.target===ov) close(); });
-  $$('.role-opt',ov).forEach(b=>b.onclick=()=>{ role=b.dataset.role;
-    $$('.role-opt',ov).forEach(x=>{ const sel=x.dataset.role===role; x.classList.toggle('primary',sel); x.classList.toggle('subtle',!sel); });
-    $('#cpass',ov).focus();
-  });
-  $('#cCancel',ov).onclick=close;
-  $('#cSave',ov).onclick=async()=>{ const p=$('#cpass',ov).value; const btn=$('#cSave',ov);
-    if(!p){ toast('Enter the password'); return; }
-    btn.disabled=true; btn.textContent='Signing in…';
-    try{ await cloudLogin(p, role); close(); toast(`Signed in as ${CLOUD.accounts[role].label} ✓`); await syncAll(); render(); }
-    catch(e){ btn.disabled=false; btn.textContent='Sign in'; toast(e.message||'Sign-in failed'); }
-  };
+
+  function showPick(){
+    const opts=Object.entries(CLOUD.accounts).map(([k,a])=>
+      `<button class="role-btn" data-role="${k}">
+        <span class="role-emoji">${ROLE_EMOJI[k]||'👤'}</span>
+        <span class="role-text"><span class="role-name">${esc(a.label)}</span><span class="role-desc">${esc(a.email)}</span></span>
+        <span class="role-go">→</span>
+      </button>`).join('');
+    ov.innerHTML=`<div class="sheet"><div class="grabber"></div>
+      <h2>Team sign-in</h2>
+      <p class="small muted" style="margin:0 0 14px">Who's signing in? Visits always save offline first — sign in to sync &amp; browse the team's visits.</p>
+      <div class="role-pick">${opts}</div>
+      <div class="btn-row" style="margin-top:14px"><button class="btn subtle block" id="cCancel">Cancel</button></div></div>`;
+    $$('.role-btn',ov).forEach(b=>b.onclick=()=>showPin(b.dataset.role));
+    $('#cCancel',ov).onclick=close;
+  }
+
+  function showPin(role){
+    const a=CLOUD.accounts[role]; if(!a) return showPick();
+    ov.innerHTML=`<div class="sheet"><div class="grabber"></div>
+      <button class="pin-back" id="cBack">← back</button>
+      <h2 style="margin-top:4px">${ROLE_EMOJI[role]||'👤'} ${esc(a.label)}</h2>
+      <p class="small muted" style="margin:0 0 12px">Enter your 6-digit PIN</p>
+      <input id="cpin" class="pin-input" type="password" inputmode="numeric" readonly placeholder="••••••">
+      <div class="keypad">
+        ${[1,2,3,4,5,6,7,8,9].map(n=>`<button type="button" class="key" data-key="${n}">${n}</button>`).join('')}
+        <button type="button" class="key key-sub" id="cDel" aria-label="Delete">⌫</button>
+        <button type="button" class="key" data-key="0">0</button>
+        <button type="button" class="key key-go" id="cGo" aria-label="Sign in">→</button>
+      </div>
+      <div id="cErr" class="auth-error" style="display:none"></div></div>`;
+    const pin=$('#cpin',ov), err=$('#cErr',ov);
+    const showErr=m=>{ err.textContent=m; err.style.display='block'; };
+    $('#cBack',ov).onclick=showPick;
+    $$('.key[data-key]',ov).forEach(k=>k.onclick=()=>{ if(pin.value.length<12){ pin.value+=k.dataset.key; err.style.display='none'; } });
+    $('#cDel',ov).onclick=()=>{ pin.value=pin.value.slice(0,-1); };
+    $('#cGo',ov).onclick=async()=>{
+      const p=pin.value;
+      if(p.length<6){ showErr('Enter your 6-digit PIN'); return; }
+      const go=$('#cGo',ov); go.disabled=true; go.textContent='…';
+      try{ await cloudLogin(p, role); close(); toast(`Signed in as ${a.label} ✓`); await syncAll(); render(); }
+      catch(e){ go.disabled=false; go.textContent='→'; pin.value='';
+        showErr(/invalid login credentials/i.test(e.message||'') ? 'Incorrect PIN — try again.' : (e.message||'Sign-in failed')); }
+    };
+  }
+
+  showPick();
 }
 
 /* ---- Team visits (read-only browse of the shared cloud) ---- */
