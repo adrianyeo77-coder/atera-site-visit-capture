@@ -864,8 +864,9 @@ function openSheet(media, editEntry){
   const isEdit=!!editEntry;
   const time = editEntry ? editEntry.time : nowHM();
   const note = editEntry ? editEntry.note : '';
-  const isOther = selCat && !CATEGORIES.includes(selCat) ? true : selCat===OTHER;
-  const otherVal = (selCat && !CATEGORIES.includes(selCat)) ? selCat : '';
+  const KNOWN_CATS = [...KEY_CATEGORIES, ...OTHER_CATEGORIES.filter(c=>c!==OTHER)];
+  const isCustom = !!selCat && !KNOWN_CATS.includes(selCat);   // legacy 'Other' or any free-text label
+  const customVal = isCustom ? selCat : '';
 
   let previewHtml='';
   if(media){
@@ -877,24 +878,22 @@ function openSheet(media, editEntry){
     previewHtml=`<div class="banner" style="margin-bottom:12px"><span class="b-ic">${editEntry.mediaType==='video'?'🎬':'🖼'}</span><div>Media kept: <code>${esc(editEntry.filename||'')}</code></div></div>`;
   }
 
-  const catGroup = (list, key) => list.map(c=>{
-    const sel=(c===OTHER && isOther) || c===selCat;
-    return `<button class="cat-btn ${sel?'sel':''}" data-cat="${esc(c)}"><span class="dot"></span><span class="grow">${esc(c)}</span>${key?'<span class="catflag">📷</span>':''}</button>`;
-  }).join('');
-  const cats = `<div class="catgrp-label">📷 Key shots — needs a photo/video</div>
-    <div class="cat-list">${catGroup(KEY_CATEGORIES, true)}</div>
-    <div class="catgrp-label">Other</div>
-    <div class="cat-list">${catGroup(OTHER_CATEGORIES, false)}</div>`;
+  const opt = c => `<option value="${esc(c)}"${c===selCat?' selected':''}>${esc(c)}</option>`;
+  const catSelect = `<select id="s_cat" class="cat-select">
+      <option value=""${!selCat?' selected':''}>— select —</option>
+      <optgroup label="📷 Key Shots — needs a photo/video">${KEY_CATEGORIES.map(opt).join('')}</optgroup>
+      <optgroup label="Other Shots">${OTHER_CATEGORIES.filter(c=>c!==OTHER).map(opt).join('')}</optgroup>
+      <optgroup label="Custom Shots"><option value="__custom__"${isCustom?' selected':''}>Custom…</option></optgroup>
+    </select>`;
 
   const ov=document.createElement('div'); ov.className='overlay';
   ov.innerHTML=`<div class="sheet" role="dialog" aria-modal="true">
     <div class="grabber"></div>
     <h2>${isEdit?'Edit entry':(media?'Tag this '+(media.mediaType==='video'?'video':'photo'):'New note')}</h2>
     ${previewHtml}
-    <label style="display:block;font-size:13px;font-weight:600;color:#334155;margin-bottom:4px">What is this?</label>
-    ${cats}
-    <div class="field" id="otherWrap" style="${isOther?'':'display:none'};margin-top:10px">
-      <label>Describe (Other)</label><input id="s_other" type="text" placeholder="Free text label" value="${esc(otherVal)}">
+    <div class="field"><label>What is this?</label>${catSelect}</div>
+    <div class="field" id="otherWrap" style="${isCustom?'':'display:none'};margin-top:2px">
+      <label>Custom shot label</label><input id="s_other" type="text" placeholder="Describe this shot" value="${esc(customVal)}">
     </div>
     <div class="field"><label>Note</label><textarea id="s_note" placeholder="Observations, labels, specs… (one line per bullet)">${esc(note)}</textarea></div>
     <button class="btn subtle block" id="s_geo" style="margin-bottom:14px">📍 ${geo?`GPS added (${geo.lat.toFixed(4)}, ${geo.lng.toFixed(4)})`:'Add GPS location (optional)'}</button>
@@ -909,12 +908,12 @@ function openSheet(media, editEntry){
   ov.addEventListener('click', e=>{ if(e.target===ov) close(); });
   $('#s_cancel',ov).onclick=close;
 
-  $$('.cat-btn',ov).forEach(b=>b.onclick=()=>{
-    selCat=b.dataset.cat;
-    $$('.cat-btn',ov).forEach(x=>x.classList.remove('sel')); b.classList.add('sel');
-    $('#otherWrap',ov).style.display = (selCat===OTHER)?'':'none';
-    if(selCat===OTHER) $('#s_other',ov).focus();
-  });
+  const catSel=$('#s_cat',ov);
+  catSel.onchange=()=>{
+    const custom = catSel.value==='__custom__';
+    $('#otherWrap',ov).style.display = custom?'':'none';
+    if(custom) $('#s_other',ov).focus();
+  };
 
   $('#s_geo',ov).onclick=()=>{
     if(!navigator.geolocation){ toast('Geolocation not available'); return; }
@@ -927,8 +926,8 @@ function openSheet(media, editEntry){
   };
 
   $('#s_save',ov).onclick=async()=>{
-    let category=selCat;
-    if(selCat===OTHER){ const o=$('#s_other',ov).value.trim(); category=o||'Other'; }
+    let category=catSel.value;
+    if(category==='__custom__'){ category=$('#s_other',ov).value.trim()||'Custom'; }
     const noteVal=$('#s_note',ov).value.trim();
     if(!category && !noteVal && !media && !(isEdit && editEntry.mediaType)){ toast('Pick a category or add a note'); return; }
     if(!category) category='Other';
@@ -1061,7 +1060,7 @@ const CLOUD = {
     management: { email: 'awmanagement@aterawater.com', label: 'AW Management' },
     staff:      { email: 'awstaff@aterawater.com',      label: 'AW Staff' }
   },
-  version: 'v15'
+  version: 'v16'
 };
 const SESS_KEY='atera-cloud-session', DEV_KEY='atera-device-id', ROLE_KEY='atera-cloud-role';
 function getRole(){ const r=localStorage.getItem(ROLE_KEY); return r&&CLOUD.accounts[r]?r:null; }
