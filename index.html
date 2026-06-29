@@ -1060,7 +1060,7 @@ const CLOUD = {
     management: { email: 'awmanagement@aterawater.com', label: 'AW Management' },
     staff:      { email: 'awstaff@aterawater.com',      label: 'AW Staff' }
   },
-  version: 'v16'
+  version: 'v17'
 };
 const SESS_KEY='atera-cloud-session', DEV_KEY='atera-device-id', ROLE_KEY='atera-cloud-role';
 function getRole(){ const r=localStorage.getItem(ROLE_KEY); return r&&CLOUD.accounts[r]?r:null; }
@@ -1277,18 +1277,31 @@ async function renderTeamVisit(){
 applyScale(getScale());
 const _aa=$('#aaBtn'); if(_aa) _aa.onclick=openTextSize;
 if('serviceWorker' in navigator){
-  // Auto-reload to the new version when an updated service worker takes over.
-  // Only reload on a genuine UPDATE (a controller already existed), never on first install.
+  // Auto-reload to the new version when an updated service worker takes over. Only on a genuine
+  // UPDATE (a controller already existed), never on first install — and never mid-capture: if a
+  // sheet/modal is open, wait for it to close so a reload can't interrupt or drop typed input.
   const hadController = !!navigator.serviceWorker.controller;
   let refreshing=false;
   navigator.serviceWorker.addEventListener('controllerchange',()=>{
-    if(refreshing || !hadController) return; refreshing=true; window.location.reload();
+    if(!hadController) return;
+    const reload=()=>{ if(refreshing) return;
+      if(document.querySelector('.overlay')){ setTimeout(reload,3000); return; } // defer while a sheet is open
+      refreshing=true; window.location.reload(); };
+    reload();
   });
   window.addEventListener('load', async ()=>{
     try{
       const reg=await navigator.serviceWorker.register('./sw.js');
-      reg.update().catch(()=>{});               // check for a new version on every launch
-      setInterval(()=>reg.update().catch(()=>{}), 60*60*1000); // and hourly if left open
+      // Check for a new version whenever we're online: on launch, each time the app returns to the
+      // foreground, when a connection comes back, on bfcache restore, and hourly if left open.
+      // Throttled to once / 30s so rapid foreground flips don't spam the network.
+      let last=0;
+      const check=()=>{ if(!navigator.onLine) return; const t=Date.now(); if(t-last<30000) return; last=t; reg.update().catch(()=>{}); };
+      check();
+      setInterval(check, 60*60*1000);
+      document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') check(); });
+      window.addEventListener('online', check);
+      window.addEventListener('pageshow', check);
     }catch(e){}
   });
 }
