@@ -1060,7 +1060,7 @@ const CLOUD = {
     management: { email: 'awmanagement@aterawater.com', label: 'AW Management' },
     staff:      { email: 'awstaff@aterawater.com',      label: 'AW Staff' }
   },
-  version: 'v17'
+  version: 'v18'
 };
 const SESS_KEY='atera-cloud-session', DEV_KEY='atera-device-id', ROLE_KEY='atera-cloud-role';
 function getRole(){ const r=localStorage.getItem(ROLE_KEY); return r&&CLOUD.accounts[r]?r:null; }
@@ -1199,7 +1199,7 @@ function openCloudSetup(){
     const pin=$('#cpin',ov), err=$('#cErr',ov);
     const showErr=m=>{ err.textContent=m; err.style.display='block'; };
     $('#cBack',ov).onclick=showPick;
-    $$('.key[data-key]',ov).forEach(k=>k.onclick=()=>{ if(pin.value.length<12){ pin.value+=k.dataset.key; err.style.display='none'; } });
+    $$('.key[data-key]',ov).forEach(k=>k.onclick=()=>{ if(pin.value.length<6){ pin.value+=k.dataset.key; err.style.display='none'; } });
     $('#cDel',ov).onclick=()=>{ pin.value=pin.value.slice(0,-1); };
     $('#cGo',ov).onclick=async()=>{
       const p=pin.value;
